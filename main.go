@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -17,6 +19,7 @@ import (
 	"github.com/charmbracelet/wish/activeterm"
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
+	"github.com/muesli/termenv"
 )
 
 const (
@@ -24,12 +27,23 @@ const (
 	port = "23234"
 )
 
+var sessionManager *SessionManager
+
 func main() {
+	
+	sessionManager = NewSessionManager()
+
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
-		wish.WithHostKeyPath(".ssh/id_ed25519"),
+		// wish.WithHostKeyPath(".ssh/id_ed25519"),
+		wish.WithPublicKeyAuth(func(ctx ssh.Context, key ssh.PublicKey) bool {
+			hash := md5.Sum(key.Marshal())
+			fingerPrint := hex.EncodeToString(hash[:])
+			ctx.SetValue("fingerprint", fingerPrint)
+			return true;
+		}),
 		wish.WithMiddleware(
-			bubbletea.Middleware(teaHandler),
+			customMiddleWare(),
 			activeterm.Middleware(), // Bubble Tea apps usually require a PTY.
 			logging.Middleware(),
 		),
@@ -58,11 +72,20 @@ func main() {
 	
 }
 
-func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-	m := model{
-		counter:   0,
+func customMiddleWare() wish.Middleware {
+	teaHandler := func(s ssh.Session) *tea.Program {
+		// pty, _, active:= s.Pty()
+		m:= model{
+			counter:   0,
+		}
+		program := tea.NewProgram(m, append(bubbletea.MakeOptions(s), tea.WithAltScreen())...)
+
+		fingerPrint := s.Context().Value("fingerprint").(string)
+		sessionManager.SetProgram(fingerPrint, program)
+		
+		return program
 	}
-	return m, []tea.ProgramOption{tea.WithAltScreen()}
+	return bubbletea.MiddlewareWithProgramHandler(teaHandler, termenv.ANSI256)
 }
 
 // Just a generic tea.Model to demo terminal information of ssh.
