@@ -9,9 +9,11 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/log"
 	"github.com/charmbracelet/ssh"
@@ -75,12 +77,25 @@ func main() {
 func customMiddleWare() wish.Middleware {
 	teaHandler := func(s ssh.Session) *tea.Program {
 		// pty, _, active:= s.Pty()
+		fingerPrint := s.Context().Value("fingerprint").(string)
+		ta := textarea.New()
+		ta.Placeholder = "Type your message here"
+		ta.Focus()
+		ta.Prompt = ">"
+
+		ta.SetWidth(30)
+		ta.SetHeight(3)
+
+		ta.KeyMap.InsertNewline.SetEnabled(false)
+
 		m:= model{
 			counter:   0,
+			messages:  []message{},
+			fingerPrint: fingerPrint,
+			textarea: ta,
 		}
 		program := tea.NewProgram(m, append(bubbletea.MakeOptions(s), tea.WithAltScreen())...)
-
-		fingerPrint := s.Context().Value("fingerprint").(string)
+		
 		sessionManager.SetProgram(fingerPrint, program)
 		
 		return program
@@ -88,9 +103,17 @@ func customMiddleWare() wish.Middleware {
 	return bubbletea.MiddlewareWithProgramHandler(teaHandler, termenv.ANSI256)
 }
 
+type message struct {
+	sender string
+	content string
+}
+
 // Just a generic tea.Model to demo terminal information of ssh.
 type model struct {
 	counter   int
+	messages  []message
+	textarea  textarea.Model
+	fingerPrint string
 }
 
 func (m model) Init() tea.Cmd {
@@ -98,18 +121,44 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var tiCmd tea.Cmd
+	m.textarea, tiCmd = m.textarea.Update(msg)
+	rescmds := []tea.Cmd{}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "enter":
+			cmds := sessionManager.SendMessage(message{sender: m.fingerPrint, content: m.textarea.Value()})
+			rescmds = append(rescmds, cmds...)
+			m.textarea.Reset()
 		}
+	case message:
+		m.messages = append(m.messages, msg)
 	}
+
+	rescmds = append(rescmds, tiCmd)
+
 	m.counter++
-	return m, nil
+	return m, tea.Batch(rescmds...)
 }
 
 func (m model) View() string {
 	s := fmt.Sprintf("counter: %d", m.counter)
+
+	s += "\n\n"
+	
+	var msgsBuilder strings.Builder
+	for _, msg := range m.messages {
+		fmt.Fprintf(&msgsBuilder, "%s: %s\n", msg.sender, msg.content)
+	}
+
+	s += fmt.Sprintf("messages: %s", msgsBuilder.String())
+
+	s += "\n\n"
+	s += m.textarea.View()
+	
 	return s
 }
