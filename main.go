@@ -20,6 +20,9 @@ import (
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
 	"github.com/muesli/termenv"
+
+	"github.com/Ashutoshbind15/ssh-chess/common"
+	"github.com/Ashutoshbind15/ssh-chess/managers"
 )
 
 const (
@@ -28,10 +31,11 @@ const (
 )
 
 var sessionManager *SessionManager
+var dataManager *managers.DataManager
 
 func main() {
-	
 	sessionManager = NewSessionManager()
+	dataManager = managers.NewDataManager()
 
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
@@ -76,23 +80,21 @@ func customMiddleWare() wish.Middleware {
 	teaHandler := func(s ssh.Session) *tea.Program {
 		// pty, _, active:= s.Pty()
 		fingerPrint := s.Context().Value("fingerprint").(string)
-		ta := textarea.New()
-		ta.Placeholder = "Type your message here"
-		ta.Focus()
-		ta.Prompt = ">"
+		chatTa := common.InitTextArea()
+		usernameInputTa := common.InitTextArea()
 
-		ta.SetWidth(30)
-		ta.SetHeight(3)
-
-		ta.KeyMap.InsertNewline.SetEnabled(false)
+		player := dataManager.GetPlayer(fingerPrint)
 
 		m:= model{
 			counter:   0,
 			messages:  []message{},
 			fingerPrint: fingerPrint,
-			textarea: ta,
+			chatTextarea: chatTa,
+			usernameInput: usernameInputTa,
 			page: PageIntro,
+			player: player,
 		}
+		
 		program := tea.NewProgram(m, append(bubbletea.MakeOptions(s), tea.WithAltScreen())...)
 		
 		sessionManager.SetProgram(fingerPrint, program)
@@ -119,9 +121,11 @@ const (
 type model struct {
 	counter   int
 	messages  []message
-	textarea  textarea.Model
+	chatTextarea  textarea.Model
+	usernameInput textarea.Model
 	fingerPrint string
 	page Page
+	player *common.Player
 }
 
 func (m model) Init() tea.Cmd {

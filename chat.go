@@ -10,16 +10,16 @@ import (
 // UpdateChat handles chat-specific update logic
 func (m model) UpdateChat(msg tea.Msg) (model, tea.Cmd) {
 	var tiCmd tea.Cmd
-	m.textarea, tiCmd = m.textarea.Update(msg)
+	m.chatTextarea, tiCmd = m.chatTextarea.Update(msg)
 	var rescmds []tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			cmds := sessionManager.SendMessage(message{sender: m.fingerPrint, content: m.textarea.Value()})
+			cmds := sessionManager.SendMessage(message{sender: m.fingerPrint, content: m.chatTextarea.Value()})
 			rescmds = append(rescmds, cmds...)
-			m.textarea.Reset()
+			m.chatTextarea.Reset()
 		}
 	case message:
 		m.messages = append(m.messages, msg)
@@ -42,7 +42,7 @@ func (m model) ViewChat() string {
 
 	s += fmt.Sprintf("messages: %s", msgsBuilder.String())
 	s += "\n\n"
-	s += m.textarea.View()
+	s += m.chatTextarea.View()
 
 	return s
 }

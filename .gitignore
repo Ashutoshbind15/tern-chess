@@ -1,3 +1,4 @@
 .ssh
 ssh-chess
 id_*
+test.db
