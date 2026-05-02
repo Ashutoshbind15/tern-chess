@@ -102,6 +102,10 @@ type message struct {
 
 type opponentJoinedGameMsg struct{}
 
+type gameUpdatedMsg struct {
+	move string
+}
+
 type Page string
 
 const (
@@ -118,12 +122,14 @@ type model struct {
 	chatTextarea  textarea.Model
 	usernameInput textinput.Model
 	gameJoinInput textinput.Model
+	moveInput     textinput.Model
 	fingerPrint   string
 	page          Page
 	previousPage  *Page
 	player        *common.Player
 	pageList      list.Model
 	currentGame   *managers.Game
+	gameNotice    string
 }
 
 func (m model) Init() tea.Cmd {
@@ -168,6 +174,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// program in real-time
 	if _, ok := msg.(opponentJoinedGameMsg); ok {
 		m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
+		if m.currentGame != nil && m.currentGame.Status() == managers.GameStatusInProgress {
+			m.gameNotice = "Opponent joined. Game on."
+		}
+	}
+	if msg, ok := msg.(gameUpdatedMsg); ok {
+		m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
+		if msg.move != "" {
+			m.gameNotice = "Opponent played " + msg.move + "."
+		}
 	}
 
 	// Handle global commands

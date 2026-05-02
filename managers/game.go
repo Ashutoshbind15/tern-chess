@@ -49,6 +49,34 @@ func (g *Game) Game() *chess.Game {
 	return g.game
 }
 
+func (g *Game) PlayerColor(fingerprint string) chess.Color {
+	if g == nil {
+		return chess.NoColor
+	}
+	if g.whitePlayer != nil && g.whitePlayer.fingerprint == fingerprint {
+		return chess.White
+	}
+	if g.blackPlayer != nil && g.blackPlayer.fingerprint == fingerprint {
+		return chess.Black
+	}
+	return chess.NoColor
+}
+
+func (g *Game) Turn() chess.Color {
+	if g == nil || g.game == nil || g.game.Position() == nil {
+		return chess.NoColor
+	}
+	return g.game.Position().Turn()
+}
+
+func (g *Game) IsPlayersTurn(fingerprint string) bool {
+	playerColor := g.PlayerColor(fingerprint)
+	if playerColor == chess.NoColor {
+		return false
+	}
+	return g.Turn() == playerColor
+}
+
 type GameManager struct {
 	games   map[string]*Game
 	players map[string]*GamePlayer
@@ -210,6 +238,39 @@ func (gm *GameManager) JoinGame(fingerprint string, gameId string) (string, erro
 	player.currentGameId = gameId
 
 	return gameId, nil
+}
+
+func (gm *GameManager) MakeMove(fingerprint string, move string) (*Game, error) {
+	player := gm.players[fingerprint]
+	if player == nil {
+		return nil, fmt.Errorf("player not found")
+	}
+	if player.currentGameId == "" {
+		return nil, fmt.Errorf("join a game first")
+	}
+
+	game := gm.games[player.currentGameId]
+	if game == nil {
+		return nil, fmt.Errorf("game not found")
+	}
+	if game.status == GameStatusWaiting {
+		return nil, fmt.Errorf("wait for an opponent to join")
+	}
+	if game.status == GameStatusFinished {
+		return nil, fmt.Errorf("this game is already finished")
+	}
+	if !game.IsPlayersTurn(fingerprint) {
+		return nil, fmt.Errorf("wait for your turn")
+	}
+	if err := game.game.MoveStr(move); err != nil {
+		return nil, err
+	}
+	if game.game.Outcome() != chess.NoOutcome {
+		game.status = GameStatusFinished
+	} else {
+		game.status = GameStatusInProgress
+	}
+	return game, nil
 }
 
 func (gm *GameManager) GameForPlayer(fingerprint string) *Game {

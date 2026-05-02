@@ -6,8 +6,11 @@ func initModel(fingerPrint string) model {
 	chatTa := common.InitTextArea()
 	usernameInputTa := common.InitTextInput()
 	gameJoinInput := common.InitTextInput()
+	moveInput := common.InitTextInput()
 	gameJoinInput.Prompt = "game id> "
 	gameJoinInput.Placeholder = "Enter game ID"
+	moveInput.Prompt = "move> "
+	moveInput.Placeholder = "e2e4"
 
 	player := dataManager.GetPlayer(fingerPrint)
 	if player != nil {
@@ -21,9 +24,10 @@ func initModel(fingerPrint string) model {
 		chatTextarea:  chatTa,
 		usernameInput: usernameInputTa,
 		gameJoinInput: gameJoinInput,
+		moveInput:     moveInput,
 		page:          PageIntro,
 		player:        player,
 		pageList:      newPageList(80, 22),
-		currentGame: gameManager.GameForPlayer(fingerPrint),
+		currentGame:   gameManager.GameForPlayer(fingerPrint),
 	}
 }
