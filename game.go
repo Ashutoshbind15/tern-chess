@@ -3,9 +3,56 @@ package main
 import (
 	"strings"
 
+	"github.com/Ashutoshbind15/ssh-chess/managers"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+func notifyOpponentJoined(gameID string, joinerFingerprint string) {
+	opp := gameManager.OpponentFingerprint(gameID, joinerFingerprint)
+	if opp == "" {
+		return
+	}
+	if prog := sessionManager.GetProgram(opp); prog != nil {
+		prog.Send(opponentJoinedGameMsg{})
+	}
+}
+
+const (
+	gamePageTitle      = "Game Page"
+	gameHelpCreate     = "Create a game: ctrl+n"
+	gameHelpJoinRandom = "Join a random game: ctrl+r"
+	gameHelpJoinByID   = "Join by ID: type the game ID below and press enter"
+	gameNoGame         = "No game"
+)
+
+func gamePageCommonRows(m model) []string {
+	return []string{
+		gamePageTitle,
+		"",
+		gameHelpCreate,
+		gameHelpJoinRandom,
+		gameHelpJoinByID,
+		"",
+		m.gameJoinInput.View(),
+	}
+}
+
+func gameStatusLine(status string) string {
+	switch status {
+	case managers.GameStatusWaiting:
+		return "Status: waiting for an opponent."
+	case managers.GameStatusInProgress:
+		return "Status: in progress — play when it is your turn."
+	case managers.GameStatusFinished:
+		return "Status: finished."
+	default:
+		if status == "" {
+			return ""
+		}
+		return "Status: " + status
+	}
+}
 
 func (m model) UpdateGame(msg tea.Msg) (model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -34,13 +81,14 @@ func (m model) UpdateGame(msg tea.Msg) (model, tea.Cmd) {
 				return m, nil
 			}
 
-			_, err := gameManager.JoinRandomGame(m.fingerPrint)
+			gameID, err := gameManager.JoinRandomGame(m.fingerPrint)
 			if err != nil {
 				return m, nil
 			}
 
 			m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
 			m.gameJoinInput.SetValue("")
+			notifyOpponentJoined(gameID, m.fingerPrint)
 			return m, nil
 		case "enter":
 			if m.player == nil {
@@ -60,6 +108,7 @@ func (m model) UpdateGame(msg tea.Msg) (model, tea.Cmd) {
 
 			m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
 			m.gameJoinInput.SetValue("")
+			notifyOpponentJoined(gameID, m.fingerPrint)
 			return m, nil
 		}
 	}
@@ -69,28 +118,22 @@ func (m model) UpdateGame(msg tea.Msg) (model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m model) getGameBoard() string {
+	if m.currentGame != nil && m.currentGame.Game() != nil {
+		return m.currentGame.Game().FEN()
+	}
+	return gameNoGame
+}
+
 func (m model) ViewGame() string {
-	currentGame := "No active game yet"
-	if m.currentGame != nil {
-		currentGame = "Current game: " + m.currentGame.ID()
+	rows := gamePageCommonRows(m)
+
+	if m.currentGame == nil {
+		rows = append(rows, "", gameNoGame)
+		return lipgloss.JoinVertical(lipgloss.Left, rows...)
 	}
 
-	status := "Status: waiting for an action"
-	if m.currentGame != nil && m.currentGame.Status() != "" {
-		status = "Status: " + m.currentGame.Status()
-	}
-
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		"Game Page",
-		"",
-		"Create a game: ctrl+n",
-		"Join a random game: ctrl+r",
-		"Join by ID: type the game ID below and press enter",
-		"",
-		m.gameJoinInput.View(),
-		"",
-		currentGame,
-		status,
-	)
+	status := m.currentGame.Status()
+	rows = append(rows, m.getGameBoard(), gameStatusLine(status))
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }

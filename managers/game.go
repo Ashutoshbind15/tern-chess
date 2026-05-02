@@ -42,6 +42,13 @@ func (g *Game) Status() string {
 	return g.status
 }
 
+func (g *Game) Game() *chess.Game {
+	if g == nil {
+		return nil
+	}
+	return g.game
+}
+
 type GameManager struct {
 	games   map[string]*Game
 	players map[string]*GamePlayer
@@ -211,4 +218,18 @@ func (gm *GameManager) GameForPlayer(fingerprint string) *Game {
 		return nil
 	}
 	return gm.games[player.currentGameId]
+}
+
+func (gm *GameManager) OpponentFingerprint(gameID string, fingerprint string) string {
+	g := gm.games[gameID]
+	if g == nil {
+		return ""
+	}
+	if g.whitePlayer != nil && g.whitePlayer.fingerprint != fingerprint {
+		return g.whitePlayer.fingerprint
+	}
+	if g.blackPlayer != nil && g.blackPlayer.fingerprint != fingerprint {
+		return g.blackPlayer.fingerprint
+	}
+	return ""
 }
