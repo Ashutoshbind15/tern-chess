@@ -37,7 +37,9 @@ func (m model) UpdateIntro(msg tea.Msg) (model, tea.Cmd) {
 			// and the text input is non-empty
 			if m.player == nil && m.usernameInput.Value() != "" {
 				m.player = &common.Player{Fingerprint: m.fingerPrint, Username: m.usernameInput.Value()}
+				// todo: make the addition async, and show a loading spinner till then
 				dataManager.AddPlayer(*m.player)
+				gameManager.SetPlayer(m.fingerPrint, m.player.Username)
 				m = m.navigateTo(PageChat)
 			}
 		}

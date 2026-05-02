@@ -34,10 +34,12 @@ const (
 
 var sessionManager *SessionManager
 var dataManager *managers.DataManager
+var gameManager *managers.GameManager
 
 func main() {
 	sessionManager = NewSessionManager()
 	dataManager = managers.NewDataManager()
+	gameManager = managers.NewGameManager()
 
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
@@ -82,21 +84,7 @@ func customMiddleWare() wish.Middleware {
 	teaHandler := func(s ssh.Session) *tea.Program {
 		// pty, _, active:= s.Pty()
 		fingerPrint := s.Context().Value("fingerprint").(string)
-		chatTa := common.InitTextArea()
-		usernameInputTa := common.InitTextInput()
-
-		player := dataManager.GetPlayer(fingerPrint)
-
-		m := model{
-			counter:       0,
-			messages:      []message{},
-			fingerPrint:   fingerPrint,
-			chatTextarea:  chatTa,
-			usernameInput: usernameInputTa,
-			page:          PageIntro,
-			player:        player,
-			pageList:      newPageList(80, 22),
-		}
+		m := initModel(fingerPrint)
 		
 		program := tea.NewProgram(m, append(bubbletea.MakeOptions(s), tea.WithAltScreen())...)
 		
@@ -118,6 +106,7 @@ const (
 	PageIntro  Page = "intro"
 	PageChat   Page = "chat"
 	PageSelect Page = "select"
+	PageGame   Page = "game"
 )
 
 // Just a generic tea.Model to demo terminal information of ssh.
@@ -126,11 +115,14 @@ type model struct {
 	messages     []message
 	chatTextarea textarea.Model
 	usernameInput textinput.Model
+	gameJoinInput textinput.Model
 	fingerPrint  string
 	page         Page
 	previousPage *Page
 	player       *common.Player
 	pageList     list.Model
+	currentGameID string
+	gameStatus    string
 }
 
 func (m model) Init() tea.Cmd {
@@ -140,7 +132,7 @@ func (m model) Init() tea.Cmd {
 func (m model) navigateTo(page Page) model {
 	// todo: add a toast or some sort of feedback for
 	// an unexpected action
-	if page == PageChat && m.player == nil {
+	if (page == PageChat || page == PageGame) && m.player == nil {
 		m.page = PageIntro
 		return m
 	}
@@ -199,6 +191,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.UpdateIntro(msg)
 		m.counter++
 		return m, cmd
+	case PageGame:
+		var cmd tea.Cmd
+		m, cmd = m.UpdateGame(msg)
+		m.counter++
+		return m, cmd
 	default:
 		m.counter++
 		return m, nil
@@ -213,6 +210,8 @@ func (m model) View() string {
 		return m.ViewChat()
 	case PageIntro:
 		return m.ViewIntro()
+	case PageGame:
+		return m.ViewGame()
 	default:
 		return "Unknown page"
 	}

@@ -22,6 +22,7 @@ func newPageList(width, height int) list.Model {
 	items := []list.Item{
 		pageMenuItem{page: PageIntro, title: "Intro", description: "Set or view your username"},
 		pageMenuItem{page: PageChat, title: "Chat", description: "Lobby chat"},
+		pageMenuItem{page: PageGame, title: "Game", description: "Play a game"},
 	}
 	l := list.New(items, delegate, width, height)
 	l.Title = "Pages"
