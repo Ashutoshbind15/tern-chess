@@ -9,4 +9,3 @@ type Player struct {
 	Fingerprint string `gorm:"uniqueIndex"`
 	Username    string
 }
-

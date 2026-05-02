@@ -10,15 +10,15 @@ func (m model) ViewIntro() string {
 	// conditionally render the username or the input for taking the username
 	if m.player == nil {
 		return lipgloss.JoinVertical(
-			lipgloss.Center, 
+			lipgloss.Center,
 			"Intro Page",
 			m.usernameInput.View(),
 		)
 	} else {
 		return lipgloss.JoinVertical(
-			lipgloss.Center, 
+			lipgloss.Center,
 			"Intro Page",
-			"Welcome, " + m.player.Username,
+			"Welcome, "+m.player.Username,
 		)
 	}
 }
@@ -44,6 +44,6 @@ func (m model) UpdateIntro(msg tea.Msg) (model, tea.Cmd) {
 			}
 		}
 	}
-	
+
 	return m, cmd
 }

@@ -9,27 +9,27 @@ import (
 )
 
 const (
-	GameStatusWaiting = "waiting"
+	GameStatusWaiting    = "waiting"
 	GameStatusInProgress = "in progress"
-	GameStatusFinished = "finished"
+	GameStatusFinished   = "finished"
 )
 
 type GamePlayer struct {
-	fingerprint string
-	username string
+	fingerprint   string
+	username      string
 	currentGameId string
 }
 
 type Game struct {
-	id string
+	id          string
 	whitePlayer *GamePlayer
 	blackPlayer *GamePlayer
-	status string
-	game *chess.Game
+	status      string
+	game        *chess.Game
 }
 
 type GameManager struct {
-	games map[string]*Game
+	games   map[string]*Game
 	players map[string]*GamePlayer
 }
 
@@ -40,7 +40,7 @@ type PlayerGameState struct {
 
 func NewGameManager() *GameManager {
 	return &GameManager{
-		games: make(map[string]*Game),
+		games:   make(map[string]*Game),
 		players: make(map[string]*GamePlayer),
 	}
 }
@@ -56,7 +56,7 @@ func (gm *GameManager) SetPlayer(fingerprint string, username string) {
 
 	gm.players[fingerprint] = &GamePlayer{
 		fingerprint: fingerprint,
-		username: username,
+		username:    username,
 	}
 }
 
@@ -91,19 +91,19 @@ func (gm *GameManager) CreateGame(fingerprint string) (string, error) {
 	color := gm.getColor()
 	if color == chess.White {
 		gm.games[gameId] = &Game{
-			id: gameId,
+			id:          gameId,
 			whitePlayer: player,
 			blackPlayer: nil,
-			status: GameStatusWaiting,
-			game: chess.NewGame(chess.UseNotation(chess.UCINotation{})),
+			status:      GameStatusWaiting,
+			game:        chess.NewGame(chess.UseNotation(chess.UCINotation{})),
 		}
 	} else {
 		gm.games[gameId] = &Game{
-			id: gameId,
+			id:          gameId,
 			whitePlayer: nil,
 			blackPlayer: player,
-			status: GameStatusWaiting,
-			game: chess.NewGame(chess.UseNotation(chess.UCINotation{})),
+			status:      GameStatusWaiting,
+			game:        chess.NewGame(chess.UseNotation(chess.UCINotation{})),
 		}
 	}
 

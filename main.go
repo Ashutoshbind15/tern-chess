@@ -48,7 +48,7 @@ func main() {
 			hash := md5.Sum(key.Marshal())
 			fingerPrint := hex.EncodeToString(hash[:])
 			ctx.SetValue("fingerprint", fingerPrint)
-			return true;
+			return true
 		}),
 		wish.WithMiddleware(
 			customMiddleWare(),
@@ -77,7 +77,7 @@ func main() {
 	if err := s.Shutdown(ctx); err != nil && !errors.Is(err, ssh.ErrServerClosed) {
 		log.Error("Could not stop server", "error", err)
 	}
-	
+
 }
 
 func customMiddleWare() wish.Middleware {
@@ -85,11 +85,11 @@ func customMiddleWare() wish.Middleware {
 		// pty, _, active:= s.Pty()
 		fingerPrint := s.Context().Value("fingerprint").(string)
 		m := initModel(fingerPrint)
-		
+
 		program := tea.NewProgram(m, append(bubbletea.MakeOptions(s), tea.WithAltScreen())...)
-		
+
 		sessionManager.SetProgram(fingerPrint, program)
-		
+
 		return program
 	}
 	return bubbletea.MiddlewareWithProgramHandler(teaHandler, termenv.ANSI256)
@@ -111,16 +111,16 @@ const (
 
 // Just a generic tea.Model to demo terminal information of ssh.
 type model struct {
-	counter      int
-	messages     []message
-	chatTextarea textarea.Model
+	counter       int
+	messages      []message
+	chatTextarea  textarea.Model
 	usernameInput textinput.Model
 	gameJoinInput textinput.Model
-	fingerPrint  string
-	page         Page
-	previousPage *Page
-	player       *common.Player
-	pageList     list.Model
+	fingerPrint   string
+	page          Page
+	previousPage  *Page
+	player        *common.Player
+	pageList      list.Model
 	currentGameID string
 	gameStatus    string
 }

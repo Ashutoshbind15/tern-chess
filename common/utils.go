@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 )
+
 func InitTextArea() textarea.Model {
 	ta := textarea.New()
 	ta.Placeholder = "Type your message here"
