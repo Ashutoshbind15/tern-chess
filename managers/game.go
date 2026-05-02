@@ -28,14 +28,23 @@ type Game struct {
 	game        *chess.Game
 }
 
+func (g *Game) ID() string {
+	if g == nil {
+		return ""
+	}
+	return g.id
+}
+
+func (g *Game) Status() string {
+	if g == nil {
+		return ""
+	}
+	return g.status
+}
+
 type GameManager struct {
 	games   map[string]*Game
 	players map[string]*GamePlayer
-}
-
-type PlayerGameState struct {
-	CurrentGameID string
-	GameStatus    string
 }
 
 func NewGameManager() *GameManager {
@@ -196,21 +205,10 @@ func (gm *GameManager) JoinGame(fingerprint string, gameId string) (string, erro
 	return gameId, nil
 }
 
-func (gm *GameManager) GetPlayerGameState(fingerprint string) PlayerGameState {
+func (gm *GameManager) GameForPlayer(fingerprint string) *Game {
 	player := gm.players[fingerprint]
 	if player == nil || player.currentGameId == "" {
-		return PlayerGameState{}
+		return nil
 	}
-
-	game := gm.games[player.currentGameId]
-	if game == nil {
-		return PlayerGameState{
-			CurrentGameID: player.currentGameId,
-		}
-	}
-
-	return PlayerGameState{
-		CurrentGameID: player.currentGameId,
-		GameStatus:    game.status,
-	}
+	return gm.games[player.currentGameId]
 }

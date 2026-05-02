@@ -14,8 +14,6 @@ func initModel(fingerPrint string) model {
 		gameManager.SetPlayer(fingerPrint, player.Username)
 	}
 
-	gameState := gameManager.GetPlayerGameState(fingerPrint)
-
 	return model{
 		counter:       0,
 		messages:      []message{},
@@ -26,7 +24,6 @@ func initModel(fingerPrint string) model {
 		page:          PageIntro,
 		player:        player,
 		pageList:      newPageList(80, 22),
-		currentGameID: gameState.CurrentGameID,
-		gameStatus:    gameState.GameStatus,
+		currentGame: gameManager.GameForPlayer(fingerPrint),
 	}
 }

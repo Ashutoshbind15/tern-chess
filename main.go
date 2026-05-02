@@ -121,8 +121,7 @@ type model struct {
 	previousPage  *Page
 	player        *common.Player
 	pageList      list.Model
-	currentGameID string
-	gameStatus    string
+	currentGame   *managers.Game
 }
 
 func (m model) Init() tea.Cmd {

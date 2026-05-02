@@ -16,59 +16,49 @@ func (m model) UpdateGame(msg tea.Msg) (model, tea.Cmd) {
 			return m, nil
 		case "ctrl+n":
 			if m.player == nil {
-				m.gameStatus = "Set a username before creating a game."
 				m = m.navigateTo(PageIntro)
 				return m, nil
 			}
 
-			gameID, err := gameManager.CreateGame(m.fingerPrint)
+			_, err := gameManager.CreateGame(m.fingerPrint)
 			if err != nil {
-				m.gameStatus = "Create failed: " + err.Error()
 				return m, nil
 			}
 
-			m.currentGameID = gameID
-			m.gameStatus = "Created a new game."
+			m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
 			m.gameJoinInput.SetValue("")
 			return m, nil
 		case "ctrl+r":
 			if m.player == nil {
-				m.gameStatus = "Set a username before joining a game."
 				m = m.navigateTo(PageIntro)
 				return m, nil
 			}
 
-			gameID, err := gameManager.JoinRandomGame(m.fingerPrint)
+			_, err := gameManager.JoinRandomGame(m.fingerPrint)
 			if err != nil {
-				m.gameStatus = "Random join failed: " + err.Error()
 				return m, nil
 			}
 
-			m.currentGameID = gameID
-			m.gameStatus = "Joined a random game."
+			m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
 			m.gameJoinInput.SetValue("")
 			return m, nil
 		case "enter":
 			if m.player == nil {
-				m.gameStatus = "Set a username before joining a game."
 				m = m.navigateTo(PageIntro)
 				return m, nil
 			}
 
 			gameID := strings.TrimSpace(m.gameJoinInput.Value())
 			if gameID == "" {
-				m.gameStatus = "Enter a game ID to join a specific game."
 				return m, nil
 			}
 
-			joinedGameID, err := gameManager.JoinGame(m.fingerPrint, gameID)
+			_, err := gameManager.JoinGame(m.fingerPrint, gameID)
 			if err != nil {
-				m.gameStatus = "Join failed: " + err.Error()
 				return m, nil
 			}
 
-			m.currentGameID = joinedGameID
-			m.gameStatus = "Joined game by ID."
+			m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
 			m.gameJoinInput.SetValue("")
 			return m, nil
 		}
@@ -81,13 +71,13 @@ func (m model) UpdateGame(msg tea.Msg) (model, tea.Cmd) {
 
 func (m model) ViewGame() string {
 	currentGame := "No active game yet"
-	if m.currentGameID != "" {
-		currentGame = "Current game: " + m.currentGameID
+	if m.currentGame != nil {
+		currentGame = "Current game: " + m.currentGame.ID()
 	}
 
 	status := "Status: waiting for an action"
-	if m.gameStatus != "" {
-		status = "Status: " + m.gameStatus
+	if m.currentGame != nil && m.currentGame.Status() != "" {
+		status = "Status: " + m.currentGame.Status()
 	}
 
 	return lipgloss.JoinVertical(
