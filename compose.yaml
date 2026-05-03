@@ -1,0 +1,17 @@
+services:
+  ssh-chess:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:23234:23234"
+    environment:
+      TERN_CHESS_ENV: production
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test: ["CMD-SHELL", "busybox nc -z 127.0.0.1 23234 || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s

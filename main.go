@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,18 +26,31 @@ import (
 
 	"github.com/Ashutoshbind15/ssh-chess/common"
 	"github.com/Ashutoshbind15/ssh-chess/managers"
+	"github.com/joho/godotenv"
 )
 
-const (
-	host = "localhost"
-	port = "23234"
-)
+const port = "23234"
+
+func init() {
+	_ = godotenv.Load()
+}
+
+func sshListenHost() string {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("TERN_CHESS_ENV"))) {
+	case "prod", "production":
+		return "0.0.0.0"
+	default:
+		return "127.0.0.1"
+	}
+}
 
 var sessionManager *SessionManager
 var dataManager *managers.DataManager
 var gameManager *managers.GameManager
 
 func main() {
+	host := sshListenHost()
+
 	sessionManager = NewSessionManager()
 	dataManager = managers.NewDataManager()
 	gameManager = managers.NewGameManager()
