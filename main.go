@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 	"github.com/charmbracelet/ssh"
 	"github.com/charmbracelet/wish"
@@ -152,6 +153,7 @@ const (
 
 // Just a generic tea.Model to demo terminal information of ssh.
 type model struct {
+	width, height   int
 	counter         int
 	messages        []message
 	chatTextarea    textarea.Model
@@ -219,6 +221,13 @@ func (m model) closePageSelect() model {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+	}
+
 	// Handle global commands
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -276,17 +285,43 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
+func (m model) headerText() string {
+	if m.player != nil {
+		return m.player.Username
+	}
+	return "Guest"
+}
+
 func (m model) View() string {
+	header := lipgloss.NewStyle().
+		Align(lipgloss.Center).
+		Width(m.width).
+		Border(lipgloss.NormalBorder(), false, false, true, false).
+		Render(m.headerText())
+
+	footer := lipgloss.NewStyle().
+		Align(lipgloss.Center).
+		Width(m.width).
+		Render(string(m.page))
+
+	var pageContent string
 	switch m.page {
 	case PageSelect:
-		return m.ViewSelect()
+		pageContent = m.ViewSelect()
 	case PageChat:
-		return m.ViewChat()
+		pageContent = m.ViewChat()
 	case PageIntro:
-		return m.ViewIntro()
+		pageContent = m.ViewIntro()
 	case PageGame:
-		return m.ViewGame()
+		pageContent = m.ViewGame()
 	default:
-		return "Unknown page"
+		pageContent = "Unknown page"
 	}
+
+	content := lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height - lipgloss.Height(header) - lipgloss.Height(footer)).
+		Render(pageContent)
+
+	return lipgloss.JoinVertical(lipgloss.Top, header, content, footer)
 }
