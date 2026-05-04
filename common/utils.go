@@ -1,6 +1,7 @@
 package common
 
 import (
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 )
@@ -22,4 +23,8 @@ func InitTextInput() textinput.Model {
 	ti.Focus()
 	ti.Prompt = ">"
 	return ti
+}
+
+func InitSpinner() spinner.Model {
+	return spinner.New(spinner.WithSpinner(spinner.MiniDot))
 }

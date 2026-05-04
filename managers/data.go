@@ -1,6 +1,7 @@
 package managers
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -38,18 +39,21 @@ func (dm *DataManager) Init() {
 	dm.db = db
 }
 
-func (dm *DataManager) GetPlayer(fingerprint string) *common.Player {
+func (dm *DataManager) GetPlayer(fingerprint string) (*common.Player, error) {
 	var player common.Player
 	result := dm.db.First(&player, "fingerprint = ?", fingerprint)
 
 	if result.Error != nil {
-		return nil
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, result.Error
 	}
-	return &player
+	return &player, nil
 }
 
-func (dm *DataManager) AddPlayer(player common.Player) {
-	dm.db.Create(&player)
+func (dm *DataManager) AddPlayer(player common.Player) error {
+	return dm.db.Create(&player).Error
 }
 
 func (dm *DataManager) DeletePlayer(fingerprint string) {

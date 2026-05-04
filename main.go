@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -122,6 +123,16 @@ type gameUpdatedMsg struct {
 	move string
 }
 
+type loadPlayerMsg struct {
+	player *common.Player
+	err    error
+}
+
+type savePlayerMsg struct {
+	player common.Player
+	err    error
+}
+
 type Page string
 
 const (
@@ -133,23 +144,34 @@ const (
 
 // Just a generic tea.Model to demo terminal information of ssh.
 type model struct {
-	counter       int
-	messages      []message
-	chatTextarea  textarea.Model
-	usernameInput textinput.Model
-	gameJoinInput textinput.Model
-	moveInput     textinput.Model
-	fingerPrint   string
-	page          Page
-	previousPage  *Page
-	player        *common.Player
-	pageList      list.Model
-	currentGame   *managers.Game
-	gameNotice    string
+	counter         int
+	messages        []message
+	chatTextarea    textarea.Model
+	usernameInput   textinput.Model
+	gameJoinInput   textinput.Model
+	moveInput       textinput.Model
+	fingerPrint     string
+	page            Page
+	previousPage    *Page
+	player          *common.Player
+	pageList        list.Model
+	currentGame     *managers.Game
+	gameNotice      string
+	introLoading    bool
+	introSaving     bool
+	introErr        string
+	usernameSpinner spinner.Model
 }
 
 func (m model) Init() tea.Cmd {
+	if m.introLoading {
+		return tea.Batch(m.usernameSpinner.Tick, loadPlayerCmd(m.fingerPrint))
+	}
 	return nil
+}
+
+func (m model) introBusy() bool {
+	return m.introLoading || m.introSaving
 }
 
 func (m model) navigateTo(page Page) model {
@@ -193,7 +215,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "tab":
-			m = m.openPageSelect()
+			if !m.introBusy() {
+				m = m.openPageSelect()
+			}
 		}
 	}
 
