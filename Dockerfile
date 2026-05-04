@@ -1,8 +1,6 @@
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 
-RUN apk add --no-cache gcc musl-dev
-
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
 	go mod download
@@ -10,7 +8,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 
 RUN --mount=type=cache,target=/go/pkg/mod \
-	CGO_ENABLED=1 GOOS=linux \
+	CGO_ENABLED=0 GOOS=linux \
 	go build -trimpath -ldflags="-s -w" -o /out/ssh-server .
 
 FROM alpine:3.22

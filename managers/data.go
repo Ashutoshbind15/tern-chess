@@ -1,8 +1,12 @@
 package managers
 
 import (
+	"fmt"
+	"os"
+	"strings"
+
 	"github.com/Ashutoshbind15/ssh-chess/common"
-	"gorm.io/driver/sqlite"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -17,9 +21,14 @@ func NewDataManager() *DataManager {
 }
 
 func (dm *DataManager) Init() {
-	db, err := gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
+	dbURL := strings.TrimSpace(os.Getenv("DB_URL"))
+	if dbURL == "" {
+		panic("DB_URL environment variable is required")
+	}
+
+	db, err := gorm.Open(postgres.Open(dbURL), &gorm.Config{})
 	if err != nil {
-		panic("failed to connect database")
+		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
 
 	if err := db.AutoMigrate(&common.Player{}); err != nil {

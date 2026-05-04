@@ -1,12 +1,32 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: tern_chess
+      POSTGRES_USER: tern_chess
+      POSTGRES_PASSWORD: tern_chess
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tern_chess -d tern_chess"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   ssh-chess:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "127.0.0.1:23234:23234"
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       TERN_CHESS_ENV: production
+      DB_URL: postgres://tern_chess:tern_chess@postgres:5432/tern_chess?sslmode=disable
     restart: unless-stopped
     init: true
     healthcheck:
@@ -15,3 +35,6 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+
+volumes:
+  postgres_data:
