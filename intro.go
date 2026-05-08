@@ -68,7 +68,41 @@ func startGamesLoad(m model) (model, tea.Cmd) {
 }
 
 func (m model) ViewIntro() string {
-	lines := []string{"Intro Page"}
+	rookArt := `
+       .::.
+      _|||||_
+     | || || |
+     |_______|
+     \__ ___ /
+      |___|_| 
+      |_|___| 
+      |___|_| 
+     (_______)
+     /_______\`
+
+	termArt := `  ____
+ | >_ |
+ |____|`
+
+	textArt := `
+  _____ _____ ____  __  __       ____ _   _ _____ ____ ____ 
+ |_   _| ____|  _ \|  \/  |     / ___| | | | ____/ ___/ ___|
+   | | |  _| | |_) | |\/| |____| |   | |_| |  _| \___ \___ \
+   | | | |___|  _ <| |  | |____| |___|  _  | |___ ___) |__) |
+   |_| |_____|_| \_\_|  |_|     \____|_| |_|_____|____/____/`
+
+	rookBlock := m.renderer.NewStyle().Foreground(lipgloss.Color("252")).Bold(true).Render(strings.Trim(rookArt, "\n"))
+	
+	termBlock := strings.Trim(termArt, "\n")
+	termStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("42")).Bold(true).MarginTop(4).MarginLeft(2)
+	termBlock = termStyle.Render(termBlock)
+
+	topBlock := lipgloss.JoinHorizontal(lipgloss.Top, rookBlock, termBlock)
+
+	textBlock := m.renderer.NewStyle().Foreground(lipgloss.Color("38")).Bold(true).Render(strings.Trim(textArt, "\n"))
+
+	artBlock := lipgloss.JoinVertical(lipgloss.Center, topBlock, "", "", textBlock)
+	lines := []string{artBlock, "", ""}
 
 	switch {
 	case m.introLoading:
