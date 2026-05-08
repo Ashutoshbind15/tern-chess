@@ -76,7 +76,7 @@ func (m model) ViewIntro() string {
 	case m.player == nil:
 		lines = append(lines, m.usernameInput.View())
 		if m.introErr != "" {
-			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(m.introErr))
+			lines = append(lines, m.renderer.NewStyle().Foreground(lipgloss.Color("9")).Render(m.introErr))
 		}
 		if m.introSaving {
 			lines = append(lines, m.usernameSpinner.View()+" saving profile...")
@@ -87,9 +87,9 @@ func (m model) ViewIntro() string {
 		case m.gamesLoading:
 			lines = append(lines, m.usernameSpinner.View()+" loading games...")
 		case m.gamesErr != "":
-			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(m.gamesErr))
+			lines = append(lines, m.renderer.NewStyle().Foreground(lipgloss.Color("9")).Render(m.gamesErr))
 		case len(m.gamesTable.Rows()) == 0:
-			lines = append(lines, lipgloss.NewStyle().Faint(true).Render("No games yet."))
+			lines = append(lines, m.renderer.NewStyle().Faint(true).Render("No games yet."))
 		default:
 			lines = append(lines, m.gamesTable.View())
 		}

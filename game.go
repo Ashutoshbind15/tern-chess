@@ -122,16 +122,15 @@ func boardGlyph(piece rune) string {
 	return string(piece)
 }
 
-func renderBoardFromFEN(fen string, flipped bool) string {
+func renderBoardFromFEN(fen string, flipped bool, r *lipgloss.Renderer) string {
 	board := parseBoardFEN(fen)
 
-	cellStyle := lipgloss.NewStyle().
+	cellStyle := r.NewStyle().
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240"))
-	fileLabel := lipgloss.NewStyle().Width(5).Align(lipgloss.Center)
-
-	rankLabel := lipgloss.NewStyle().Width(3).Align(lipgloss.Center)
+	fileLabel := r.NewStyle().Width(5).Align(lipgloss.Center)
+	rankLabel := r.NewStyle().Width(3).Align(lipgloss.Center)
 
 	files := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
 	if flipped {
@@ -340,6 +339,7 @@ func (m model) getGameBoard() string {
 		return renderBoardFromFEN(
 			m.currentGame.Game().FEN(),
 			m.currentGame.PlayerColor(m.fingerPrint) == chess.Black,
+			m.renderer,
 		)
 	}
 	return gameNoGame

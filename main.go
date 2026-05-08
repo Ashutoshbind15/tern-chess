@@ -99,9 +99,14 @@ func main() {
 
 func customMiddleWare() wish.Middleware {
 	teaHandler := func(s ssh.Session) *tea.Program {
-		// pty, _, active:= s.Pty()
+		_, _, active := s.Pty()
+		if !active {
+			return nil
+		}
+
+		renderer := bubbletea.MakeRenderer(s)
 		fingerPrint := s.Context().Value("fingerprint").(string)
-		m := initModel(fingerPrint)
+		m := initModel(fingerPrint, renderer)
 
 		program := tea.NewProgram(m, append(bubbletea.MakeOptions(s), tea.WithAltScreen())...)
 
@@ -174,6 +179,7 @@ type model struct {
 	gamesTable      table.Model
 	gamesLoading    bool
 	gamesErr        string
+	renderer        *lipgloss.Renderer
 }
 
 func (m model) Init() tea.Cmd {
@@ -293,13 +299,13 @@ func (m model) headerText() string {
 }
 
 func (m model) View() string {
-	header := lipgloss.NewStyle().
+	header := m.renderer.NewStyle().
 		Align(lipgloss.Center).
 		Width(m.width).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
 		Render(m.headerText())
 
-	footer := lipgloss.NewStyle().
+	footer := m.renderer.NewStyle().
 		Align(lipgloss.Center).
 		Width(m.width).
 		Render(string(m.page))
@@ -318,7 +324,7 @@ func (m model) View() string {
 		pageContent = "Unknown page"
 	}
 
-	content := lipgloss.NewStyle().
+	content := m.renderer.NewStyle().
 		Width(m.width).
 		Height(m.height - lipgloss.Height(header) - lipgloss.Height(footer)).
 		Render(pageContent)
