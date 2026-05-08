@@ -4,6 +4,8 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/Ashutoshbind15/ssh-chess/managers"
 )
 
 const (
@@ -111,7 +113,25 @@ func (m model) UpdateSelect(msg tea.Msg) (model, tea.Cmd) {
 				m = m.navigateTo(it.page)
 				m.previousPage = nil
 			}
-			return m, nil
+			switch m.page {
+			case PageIntro:
+				if m.player != nil {
+					return m, nil
+				}
+				return m, m.usernameInput.Focus()
+			case PageChat:
+				return m, m.chatTextarea.Focus()
+			case PageGame:
+				if m.currentGame == nil {
+					return m, m.gameJoinInput.Focus()
+				}
+				if m.currentGame.Status() == managers.GameStatusInProgress {
+					return m, m.moveInput.Focus()
+				}
+				return m, nil
+			default:
+				return m, nil
+			}
 		case "esc":
 			m = m.closePageSelect()
 			return m, nil

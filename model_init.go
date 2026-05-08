@@ -8,6 +8,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// textInputViewWidth must be > 0: bubbles v0.21 textinput placeholderView uses
+// make([]rune, m.Width+1) and early-returns when Width is 0, so a zero width
+// truncates the placeholder to a single character.
+const textInputViewWidth = 40
+
 func newGamesTable(r *lipgloss.Renderer) table.Model {
 	columns := []table.Column{
 		{Title: "Date", Width: 16},
@@ -89,9 +94,13 @@ func initModel(fingerPrint string, renderer *lipgloss.Renderer) model {
 	applyRendererTextInputStyles(&moveInput, renderer)
 
 	gameJoinInput.Prompt = "game id> "
-	gameJoinInput.Placeholder = "Enter game ID"
+	gameJoinInput.Placeholder = "abc123"
+	gameJoinInput.Width = textInputViewWidth
 	moveInput.Prompt = "move> "
 	moveInput.Placeholder = "e2e4"
+	moveInput.Width = textInputViewWidth
+
+	usernameInputTa.Width = textInputViewWidth
 
 	return model{
 		counter:         0,

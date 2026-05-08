@@ -184,7 +184,11 @@ type model struct {
 
 func (m model) Init() tea.Cmd {
 	if m.introLoading {
-		return tea.Batch(m.usernameSpinner.Tick, loadPlayerCmd(m.fingerPrint))
+		return tea.Batch(
+			m.usernameSpinner.Tick,
+			loadPlayerCmd(m.fingerPrint),
+			m.usernameInput.Focus(),
+		)
 	}
 	return nil
 }

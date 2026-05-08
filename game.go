@@ -232,7 +232,7 @@ func (m model) UpdateGame(msg tea.Msg) (model, tea.Cmd) {
 			opponent = "Opponent"
 		}
 		m.gameNotice = opponent + " joined. Game on."
-		return m, nil
+		return m, m.moveInput.Focus()
 	case gameUpdatedMsg:
 		m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
 		if msg.move != "" {
@@ -262,7 +262,7 @@ func (m model) updateGameLobby(msg tea.Msg) (model, tea.Cmd) {
 		switch key.String() {
 		case "esc":
 			m = m.navigateTo(PageChat)
-			return m, nil
+			return m, m.chatTextarea.Focus()
 		case "ctrl+n":
 			gameID, err := gameManager.CreateGame(m.fingerPrint)
 			if err != nil {
@@ -285,7 +285,7 @@ func (m model) updateGameLobby(msg tea.Msg) (model, tea.Cmd) {
 			m.moveInput.SetValue("")
 			m.gameNotice = "Joined game " + gameID + "."
 			notifyOpponentJoined(gameID, m.fingerPrint)
-			return m, nil
+			return m, m.moveInput.Focus()
 		case "enter":
 			gameID := strings.TrimSpace(m.gameJoinInput.Value())
 			if gameID == "" {
@@ -300,6 +300,9 @@ func (m model) updateGameLobby(msg tea.Msg) (model, tea.Cmd) {
 			m.moveInput.SetValue("")
 			m.gameNotice = "Joined game " + gameID + "."
 			notifyOpponentJoined(gameID, m.fingerPrint)
+			if m.currentGame.Status() == managers.GameStatusInProgress {
+				return m, m.moveInput.Focus()
+			}
 			return m, nil
 		}
 	}
@@ -314,6 +317,7 @@ func (m model) updateGameLobby(msg tea.Msg) (model, tea.Cmd) {
 func (m model) updateGameWaiting(msg tea.Msg) (model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
 		m = m.navigateTo(PageChat)
+		return m, m.chatTextarea.Focus()
 	}
 	return m, nil
 }
@@ -325,7 +329,7 @@ func (m model) updateGameInProgress(msg tea.Msg) (model, tea.Cmd) {
 		switch key.String() {
 		case "esc":
 			m = m.navigateTo(PageChat)
-			return m, nil
+			return m, m.chatTextarea.Focus()
 		case "enter":
 			move := strings.ToLower(strings.TrimSpace(m.moveInput.Value()))
 			if move == "" {
@@ -358,6 +362,7 @@ func (m model) updateGameInProgress(msg tea.Msg) (model, tea.Cmd) {
 func (m model) updateGameFinished(msg tea.Msg) (model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
 		m = m.navigateTo(PageChat)
+		return m, m.chatTextarea.Focus()
 	}
 	return m, nil
 }

@@ -103,12 +103,16 @@ func (m model) UpdateIntro(msg tea.Msg) (model, tea.Cmd) {
 		var spCmd tea.Cmd
 		m.usernameSpinner, spCmd = m.usernameSpinner.Update(msg)
 
+		var tiCmd tea.Cmd
+		if _, ok := msg.(tea.KeyMsg); !ok {
+			m.usernameInput, tiCmd = m.usernameInput.Update(msg)
+		}
+
 		if lm, ok := msg.(loadPlayerMsg); ok {
 			m.introLoading = false
 			if lm.err != nil {
 				m.introErr = lm.err.Error()
-				m.usernameInput.Focus()
-				return m, spCmd
+				return m, tea.Batch(spCmd, tiCmd, m.usernameInput.Focus())
 			}
 
 			m.introErr = ""
@@ -118,27 +122,26 @@ func (m model) UpdateIntro(msg tea.Msg) (model, tea.Cmd) {
 				m.usernameInput.SetValue(lm.player.Username)
 				var loadCmd tea.Cmd
 				m, loadCmd = startGamesLoad(m)
-				return m, tea.Batch(spCmd, loadCmd)
+				return m, tea.Batch(spCmd, tiCmd, loadCmd)
 			}
-			return m, spCmd
+			return m, tea.Batch(spCmd, tiCmd, m.usernameInput.Focus())
 		}
 
 		if sm, ok := msg.(savePlayerMsg); ok {
 			m.introSaving = false
 			if sm.err != nil {
 				m.introErr = sm.err.Error()
-				m.usernameInput.Focus()
-				return m, spCmd
+				return m, tea.Batch(spCmd, tiCmd, m.usernameInput.Focus())
 			}
 			m.introErr = ""
 			m.player = &sm.player
 			var loadCmd tea.Cmd
 			m, loadCmd = startGamesLoad(m)
 			m = m.navigateTo(PageChat)
-			return m, tea.Batch(spCmd, loadCmd)
+			return m, tea.Batch(spCmd, tiCmd, loadCmd, m.chatTextarea.Focus())
 		}
 
-		return m, spCmd
+		return m, tea.Batch(spCmd, tiCmd)
 	}
 
 	if m.player != nil {
@@ -147,7 +150,7 @@ func (m model) UpdateIntro(msg tea.Msg) (model, tea.Cmd) {
 
 		if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
 			m = m.navigateTo(PageChat)
-			return m, tblCmd
+			return m, tea.Batch(tblCmd, m.chatTextarea.Focus())
 		}
 		return m, tblCmd
 	}
