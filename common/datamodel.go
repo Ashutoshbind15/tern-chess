@@ -20,4 +20,5 @@ type Game struct {
 	PGN              string
 	Outcome          string
 	Method           string
+	TimeControl      int
 }

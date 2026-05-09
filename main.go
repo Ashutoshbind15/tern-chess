@@ -30,6 +30,7 @@ import (
 	"github.com/Ashutoshbind15/ssh-chess/common"
 	"github.com/Ashutoshbind15/ssh-chess/managers"
 	"github.com/joho/godotenv"
+	"github.com/notnil/chess"
 )
 
 const port = "23234"
@@ -50,6 +51,7 @@ func sshListenHost() string {
 var sessionManager *SessionManager
 var dataManager *managers.DataManager
 var gameManager *managers.GameManager
+var clockManager *managers.ClockManager
 
 func main() {
 	host := sshListenHost()
@@ -57,6 +59,8 @@ func main() {
 	sessionManager = NewSessionManager()
 	dataManager = managers.NewDataManager()
 	gameManager = managers.NewGameManager()
+	clockManager = managers.NewClockManager(gameManager, dataManager, sessionManager)
+	go clockManager.Start()
 
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
@@ -156,30 +160,46 @@ const (
 	PageGame   Page = "game"
 )
 
+type TimeControlChoice int
+
+const (
+	NoTimeControl TimeControlChoice = 0
+	TimeControl1  TimeControlChoice = 1
+	TimeControl3  TimeControlChoice = 3
+	TimeControl5  TimeControlChoice = 5
+)
+
+func (tc TimeControlChoice) ToGameTimeControl() managers.TimeControl {
+	return managers.TimeControl(tc)
+}
+
 // Just a generic tea.Model to demo terminal information of ssh.
 type model struct {
-	width, height   int
-	counter         int
-	messages        []message
-	chatTextarea    textarea.Model
-	usernameInput   textinput.Model
-	gameJoinInput   textinput.Model
-	moveInput       textinput.Model
-	fingerPrint     string
-	page            Page
-	previousPage    *Page
-	player          *common.Player
-	pageList        list.Model
-	currentGame     *managers.Game
-	gameNotice      string
-	introLoading    bool
-	introSaving     bool
-	introErr        string
-	usernameSpinner spinner.Model
-	gamesTable      table.Model
-	gamesLoading    bool
-	gamesErr        string
-	renderer        *lipgloss.Renderer
+	width, height      int
+	counter            int
+	messages           []message
+	chatTextarea       textarea.Model
+	usernameInput      textinput.Model
+	gameJoinInput      textinput.Model
+	moveInput          textinput.Model
+	fingerPrint        string
+	page               Page
+	previousPage       *Page
+	player             *common.Player
+	pageList           list.Model
+	currentGame        *managers.Game
+	gameNotice         string
+	introLoading       bool
+	introSaving        bool
+	introErr           string
+	usernameSpinner    spinner.Model
+	gamesTable         table.Model
+	gamesLoading       bool
+	gamesErr           string
+	renderer           *lipgloss.Renderer
+	selectedTimeControl TimeControlChoice
+	whiteTimeLeft      time.Duration
+	blackTimeLeft      time.Duration
 }
 
 func (m model) Init() tea.Cmd {
@@ -265,6 +285,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.gamesErr = ""
 		m.gamesTable.SetRows(gameRowsFor(m.fingerPrint, msg.games))
 		return m, nil
+	case managers.ClockUpdateMsg:
+		if m.currentGame != nil && m.currentGame.ID() == msg.GameID {
+			m.whiteTimeLeft = msg.WhiteTime
+			m.blackTimeLeft = msg.BlackTime
+		}
+		return m, nil
+	case managers.TimeForfeitMsg:
+		if m.currentGame == nil || m.currentGame.ID() != msg.GameID {
+			return m, nil
+		}
+		if msg.LoserColor == chess.White {
+			m.gameNotice = "White ran out of time. Black wins!"
+		} else {
+			m.gameNotice = "Black ran out of time. White wins!"
+		}
+		m.gamesLoading = true
+		return m, loadGamesCmd(m.fingerPrint)
 	}
 
 	// Route to page-specific update handlers

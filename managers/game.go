@@ -3,6 +3,8 @@ package managers
 import (
 	"fmt"
 	"math/rand"
+	"sync"
+	"time"
 
 	"github.com/Ashutoshbind15/ssh-chess/common"
 	"github.com/google/uuid"
@@ -14,6 +16,26 @@ const (
 	GameStatusInProgress = "in progress"
 	GameStatusFinished   = "finished"
 )
+
+const (
+	MethodTimeForfeit = "time forfeit"
+)
+
+type TimeControl int
+
+const (
+	TimeControl1Min TimeControl = 1
+	TimeControl3Min TimeControl = 3
+	TimeControl5Min TimeControl = 5
+)
+
+func (tc TimeControl) Duration() time.Duration {
+	return time.Duration(tc) * time.Minute
+}
+
+func (tc TimeControl) String() string {
+	return fmt.Sprintf("%d min", tc)
+}
 
 type GamePlayer struct {
 	fingerprint   string
@@ -27,6 +49,11 @@ type Game struct {
 	blackPlayer *GamePlayer
 	status      string
 	game        *chess.Game
+
+	timeControl   TimeControl
+	whiteTimeLeft time.Duration
+	blackTimeLeft time.Duration
+	turnStartedAt time.Time
 }
 
 func (g *Game) ID() string {
@@ -48,6 +75,13 @@ func (g *Game) Game() *chess.Game {
 		return nil
 	}
 	return g.game
+}
+
+func (g *Game) TimeControl() TimeControl {
+	if g == nil {
+		return 0
+	}
+	return g.timeControl
 }
 
 func (g *Game) PlayerColor(fingerprint string) chess.Color {
@@ -78,8 +112,41 @@ func (g *Game) IsPlayersTurn(fingerprint string) bool {
 	return g.Turn() == playerColor
 }
 
+func (g *Game) CurrentClocks() (whiteTime time.Duration, blackTime time.Duration) {
+	if g == nil {
+		return 0, 0
+	}
+	whiteTime = g.whiteTimeLeft
+	blackTime = g.blackTimeLeft
+
+	if g.status == GameStatusInProgress && !g.turnStartedAt.IsZero() {
+		elapsed := time.Since(g.turnStartedAt)
+		if g.Turn() == chess.White {
+			whiteTime -= elapsed
+		} else {
+			blackTime -= elapsed
+		}
+	}
+	return whiteTime, blackTime
+}
+
+func (g *Game) IsTimeExpired() (bool, chess.Color) {
+	if g == nil || g.status != GameStatusInProgress {
+		return false, chess.NoColor
+	}
+	whiteTime, blackTime := g.CurrentClocks()
+	if whiteTime <= 0 {
+		return true, chess.White
+	}
+	if blackTime <= 0 {
+		return true, chess.Black
+	}
+	return false, chess.NoColor
+}
+
 type GameManager struct {
-	games   map[string]*Game
+	mu     sync.Mutex
+	games  map[string]*Game
 	players map[string]*GamePlayer
 }
 
@@ -122,7 +189,10 @@ func (gm *GameManager) getColor() chess.Color {
 	return chess.Black
 }
 
-func (gm *GameManager) CreateGame(fingerprint string) (string, error) {
+func (gm *GameManager) CreateGame(fingerprint string, tc TimeControl) (string, error) {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
 	player := gm.players[fingerprint]
 	if player == nil {
 		return "", fmt.Errorf("player not found")
@@ -136,35 +206,44 @@ func (gm *GameManager) CreateGame(fingerprint string) (string, error) {
 	color := gm.getColor()
 	if color == chess.White {
 		gm.games[gameId] = &Game{
-			id:          gameId,
-			whitePlayer: player,
-			blackPlayer: nil,
-			status:      GameStatusWaiting,
-			game:        chess.NewGame(chess.UseNotation(chess.UCINotation{})),
+			id:            gameId,
+			whitePlayer:   player,
+			blackPlayer:   nil,
+			status:        GameStatusWaiting,
+			game:          chess.NewGame(chess.UseNotation(chess.UCINotation{})),
+			timeControl:   tc,
+			whiteTimeLeft: tc.Duration(),
+			blackTimeLeft: tc.Duration(),
 		}
 	} else {
 		gm.games[gameId] = &Game{
-			id:          gameId,
-			whitePlayer: nil,
-			blackPlayer: player,
-			status:      GameStatusWaiting,
-			game:        chess.NewGame(chess.UseNotation(chess.UCINotation{})),
+			id:            gameId,
+			whitePlayer:   nil,
+			blackPlayer:   player,
+			status:        GameStatusWaiting,
+			game:          chess.NewGame(chess.UseNotation(chess.UCINotation{})),
+			timeControl:   tc,
+			whiteTimeLeft: tc.Duration(),
+			blackTimeLeft: tc.Duration(),
 		}
 	}
 
 	return gameId, nil
 }
 
-func (gm *GameManager) GetHalfGame() *Game {
+func (gm *GameManager) GetHalfGame(tc TimeControl) *Game {
 	for _, game := range gm.games {
-		if game.status == GameStatusWaiting {
+		if game.status == GameStatusWaiting && game.timeControl == tc {
 			return game
 		}
 	}
 	return nil
 }
 
-func (gm *GameManager) JoinRandomGame(fingerprint string) (string, error) {
+func (gm *GameManager) JoinRandomGame(fingerprint string, tc TimeControl) (string, error) {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
 	player := gm.players[fingerprint]
 	if player == nil {
 		return "", fmt.Errorf("player not found")
@@ -176,6 +255,9 @@ func (gm *GameManager) JoinRandomGame(fingerprint string) (string, error) {
 	var halfGame *Game
 	for _, game := range gm.games {
 		if game.status != GameStatusWaiting {
+			continue
+		}
+		if game.timeControl != tc {
 			continue
 		}
 		if game.whitePlayer != nil && game.whitePlayer.fingerprint == fingerprint {
@@ -198,12 +280,16 @@ func (gm *GameManager) JoinRandomGame(fingerprint string) (string, error) {
 	}
 
 	halfGame.status = GameStatusInProgress
+	halfGame.turnStartedAt = time.Now()
 	player.currentGameId = halfGame.id
 
 	return halfGame.id, nil
 }
 
 func (gm *GameManager) JoinGame(fingerprint string, gameId string) (string, error) {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
 	player := gm.players[fingerprint]
 	if player == nil {
 		return "", fmt.Errorf("player not found")
@@ -236,12 +322,16 @@ func (gm *GameManager) JoinGame(fingerprint string, gameId string) (string, erro
 	}
 
 	game.status = GameStatusInProgress
+	game.turnStartedAt = time.Now()
 	player.currentGameId = gameId
 
 	return gameId, nil
 }
 
 func (gm *GameManager) MakeMove(fingerprint string, move string) (*Game, error) {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
 	player := gm.players[fingerprint]
 	if player == nil {
 		return nil, fmt.Errorf("player not found")
@@ -260,21 +350,79 @@ func (gm *GameManager) MakeMove(fingerprint string, move string) (*Game, error) 
 	if game.status == GameStatusFinished {
 		return nil, fmt.Errorf("this game is already finished")
 	}
+
 	if !game.IsPlayersTurn(fingerprint) {
 		return nil, fmt.Errorf("wait for your turn")
 	}
+
+	whiteTime, blackTime := game.CurrentClocks()
+	if game.Turn() == chess.White {
+		if whiteTime <= 0 {
+			return nil, fmt.Errorf("time ran out")
+		}
+	} else if blackTime <= 0 {
+		return nil, fmt.Errorf("time ran out")
+	}
+
 	if err := game.game.MoveStr(move); err != nil {
 		return nil, err
 	}
+
+	elapsed := time.Since(game.turnStartedAt)
+	playerColor := game.PlayerColor(fingerprint)
+	if playerColor == chess.White {
+		game.whiteTimeLeft -= elapsed
+		if game.whiteTimeLeft < 0 {
+			game.whiteTimeLeft = 0
+		}
+	} else {
+		game.blackTimeLeft -= elapsed
+		if game.blackTimeLeft < 0 {
+			game.blackTimeLeft = 0
+		}
+	}
+
 	if game.game.Outcome() != chess.NoOutcome {
 		game.status = GameStatusFinished
 	} else {
 		game.status = GameStatusInProgress
+		game.turnStartedAt = time.Now()
 	}
+
 	return game, nil
 }
 
+func (gm *GameManager) EndByTimeForfeit(gameID string, loser chess.Color) *Game {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
+	game := gm.games[gameID]
+	if game == nil || game.status != GameStatusInProgress {
+		return nil
+	}
+
+	elapsed := time.Since(game.turnStartedAt)
+	if game.Turn() == chess.White {
+		game.whiteTimeLeft -= elapsed
+		if game.whiteTimeLeft < 0 {
+			game.whiteTimeLeft = 0
+		}
+	} else {
+		game.blackTimeLeft -= elapsed
+		if game.blackTimeLeft < 0 {
+			game.blackTimeLeft = 0
+		}
+	}
+
+	game.status = GameStatusFinished
+	game.game.Resign(loser)
+	return game
+}
+
 func (gm *GameManager) PlayerUsername(fingerprint string) string {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
 	player := gm.players[fingerprint]
 	if player == nil {
 		return ""
@@ -283,6 +431,9 @@ func (gm *GameManager) PlayerUsername(fingerprint string) string {
 }
 
 func (gm *GameManager) GameForPlayer(fingerprint string) *Game {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
 	player := gm.players[fingerprint]
 	if player == nil || player.currentGameId == "" {
 		return nil
@@ -291,6 +442,9 @@ func (gm *GameManager) GameForPlayer(fingerprint string) *Game {
 }
 
 func (gm *GameManager) BuildGameRecord(gameID string) common.Game {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
 	game := gm.games[gameID]
 	return common.Game{
 		GameID:           game.id,
@@ -298,9 +452,10 @@ func (gm *GameManager) BuildGameRecord(gameID string) common.Game {
 		WhiteUsername:    game.whitePlayer.username,
 		BlackFingerprint: game.blackPlayer.fingerprint,
 		BlackUsername:    game.blackPlayer.username,
-		PGN:              game.game.String(),
+		PGN:             game.game.String(),
 		Outcome:          string(game.game.Outcome()),
 		Method:           game.game.Method().String(),
+		TimeControl:      int(game.timeControl),
 	}
 }
 
@@ -308,6 +463,9 @@ func (gm *GameManager) BuildGameRecord(gameID string) common.Game {
 // currentGameId on both players so the Game object can be GC'd. Must only
 // be called after the game has been durably persisted.
 func (gm *GameManager) RemoveGame(gameID string) {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
 	game := gm.games[gameID]
 	game.whitePlayer.currentGameId = ""
 	game.blackPlayer.currentGameId = ""
@@ -315,6 +473,9 @@ func (gm *GameManager) RemoveGame(gameID string) {
 }
 
 func (gm *GameManager) OpponentFingerprint(gameID string, fingerprint string) string {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
 	g := gm.games[gameID]
 	if g == nil {
 		return ""
@@ -326,4 +487,17 @@ func (gm *GameManager) OpponentFingerprint(gameID string, fingerprint string) st
 		return g.blackPlayer.fingerprint
 	}
 	return ""
+}
+
+func (gm *GameManager) AllInProgressGames() []*Game {
+	gm.mu.Lock()
+	defer gm.mu.Unlock()
+
+	var result []*Game
+	for _, game := range gm.games {
+		if game.status == GameStatusInProgress {
+			result = append(result, game)
+		}
+	}
+	return result
 }

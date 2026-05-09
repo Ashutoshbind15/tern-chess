@@ -1,31 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/Ashutoshbind15/ssh-chess/common"
 	"github.com/Ashutoshbind15/ssh-chess/managers"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/notnil/chess"
 )
-
-func saveGameCmd(record common.Game) tea.Cmd {
-	return func() tea.Msg {
-		if err := dataManager.AddGame(record); err != nil {
-			return nil
-		}
-		gameManager.RemoveGame(record.GameID)
-		// Both players need their intro games table refreshed.
-		for _, fp := range []string{record.WhiteFingerprint, record.BlackFingerprint} {
-			if prog := sessionManager.GetProgram(fp); prog != nil {
-				prog.Send(gamesRefreshMsg{})
-			}
-		}
-		return nil
-	}
-}
 
 func notifyOpponentJoined(gameID string, joinerFingerprint string) {
 	opp := gameManager.OpponentFingerprint(gameID, joinerFingerprint)
@@ -49,6 +34,19 @@ func notifyOpponentMoved(gameID string, moverFingerprint string, move string) {
 	}
 }
 
+func persistAndRemoveGame(gameID string) {
+	record := gameManager.BuildGameRecord(gameID)
+	if err := dataManager.AddGame(record); err == nil {
+		gameManager.RemoveGame(gameID)
+		// Both players need their intro games table refreshed.
+		for _, fp := range []string{record.WhiteFingerprint, record.BlackFingerprint} {
+			if prog := sessionManager.GetProgram(fp); prog != nil {
+				prog.Send(gamesRefreshMsg{})
+			}
+		}
+	}
+}
+
 const (
 	gamePageTitle      = "Game Page"
 	gameHelpCreate     = "Create a game: ctrl+n"
@@ -56,18 +54,44 @@ const (
 	gameHelpJoinByID   = "Join by ID: type the game ID below and press enter"
 	gameHelpMove       = "Make a move: type UCI like e2e4 and press enter"
 	gameNoGame         = "No game"
+	gameHelpTimeSelect = "Select time: [1] 1 min  [3] 3 min  [5] 5 min"
 )
 
+func formatDuration(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSeconds := int(d.Seconds())
+	minutes := totalSeconds / 60
+	seconds := totalSeconds % 60
+	if d < time.Minute {
+		return fmt.Sprintf("%d:%02d", minutes, seconds)
+	}
+	return fmt.Sprintf("%d:%02d", minutes, seconds)
+}
+
+func formatClock(whiteTime, blackTime time.Duration, playerColor chess.Color) string {
+	whiteStr := formatDuration(whiteTime)
+	blackStr := formatDuration(blackTime)
+
+	if playerColor == chess.White {
+		return "Time | You: " + whiteStr + "  Opp: " + blackStr
+	}
+	return "Time | You: " + blackStr + "  Opp: " + whiteStr
+}
+
 func gamePageCommonRows(m model) []string {
-	return []string{
+	rows := []string{
 		gamePageTitle,
 		"",
-		gameHelpCreate,
-		gameHelpJoinRandom,
-		gameHelpJoinByID,
-		"",
-		m.gameJoinInput.View(),
 	}
+	if m.selectedTimeControl == NoTimeControl {
+		rows = append(rows, gameHelpTimeSelect)
+	} else {
+		rows = append(rows, "Time control: "+strconv.Itoa(int(m.selectedTimeControl))+" min  (press 1/3/5 to change)")
+	}
+	rows = append(rows, "", gameHelpCreate, gameHelpJoinRandom, gameHelpJoinByID, "", m.gameJoinInput.View())
+	return rows
 }
 
 func gameStatusLine(status string) string {
@@ -219,10 +243,11 @@ func gameTurnLine(game *managers.Game, fingerprint string) string {
 }
 
 // UpdateGame is the entry point for the game page. It first handles
-// page-scoped messages (opponent joined / opponent moved) and then routes
-// to a state-specific handler based on whether the player has a game and
-// what state that game is in. Each sub-handler can assume the invariants
-// for its state, so we don't have to defensively re-check them.
+// page-scoped messages (opponent joined / opponent moved, clock ticks,
+// time forfeit) and then routes to a state-specific handler based on whether
+// the player has a game and what state that game is in. Each sub-handler can
+// assume the invariants for its state, so we don't have to defensively
+// re-check them.
 func (m model) UpdateGame(msg tea.Msg) (model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case opponentJoinedGameMsg:
@@ -234,11 +259,30 @@ func (m model) UpdateGame(msg tea.Msg) (model, tea.Cmd) {
 		m.gameNotice = opponent + " joined. Game on."
 		return m, m.moveInput.Focus()
 	case gameUpdatedMsg:
-		m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
+		if m.currentGame == nil {
+			return m, nil
+		}
 		if msg.move != "" {
 			m.gameNotice = "Opponent played " + msg.move + "."
 		}
 		return m, nil
+	case managers.ClockUpdateMsg:
+		if m.currentGame != nil && m.currentGame.ID() == msg.GameID {
+			m.whiteTimeLeft = msg.WhiteTime
+			m.blackTimeLeft = msg.BlackTime
+		}
+		return m, nil
+	case managers.TimeForfeitMsg:
+		if m.currentGame == nil || m.currentGame.ID() != msg.GameID {
+			return m, nil
+		}
+		if msg.LoserColor == chess.White {
+			m.gameNotice = "White ran out of time. Black wins!"
+		} else {
+			m.gameNotice = "Black ran out of time. White wins!"
+		}
+		m.gamesLoading = true
+		return m, loadGamesCmd(m.fingerPrint)
 	}
 
 	if m.currentGame == nil {
@@ -256,15 +300,28 @@ func (m model) UpdateGame(msg tea.Msg) (model, tea.Cmd) {
 }
 
 // updateGameLobby handles input when the player is on the game page but
-// not yet in a game: create, join random, or join by ID.
+// not yet in a game: pick a time control, then create, join random, or join by ID.
 func (m model) updateGameLobby(msg tea.Msg) (model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "esc":
 			m = m.navigateTo(PageChat)
 			return m, m.chatTextarea.Focus()
+		case "1":
+			m.selectedTimeControl = TimeControl1
+			return m, nil
+		case "3":
+			m.selectedTimeControl = TimeControl3
+			return m, nil
+		case "5":
+			m.selectedTimeControl = TimeControl5
+			return m, nil
 		case "ctrl+n":
-			gameID, err := gameManager.CreateGame(m.fingerPrint)
+			if m.selectedTimeControl == NoTimeControl {
+				m.gameNotice = "Select a time control first (1, 3, or 5)."
+				return m, nil
+			}
+			gameID, err := gameManager.CreateGame(m.fingerPrint, m.selectedTimeControl.ToGameTimeControl())
 			if err != nil {
 				m.gameNotice = err.Error()
 				return m, nil
@@ -272,10 +329,14 @@ func (m model) updateGameLobby(msg tea.Msg) (model, tea.Cmd) {
 			m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
 			m.gameJoinInput.SetValue("")
 			m.moveInput.SetValue("")
-			m.gameNotice = "Created game " + gameID + ". Share the ID with your opponent."
+			m.gameNotice = "Created " + m.selectedTimeControl.ToGameTimeControl().String() + " game " + gameID + ". Share the ID with your opponent."
 			return m, nil
 		case "ctrl+r":
-			gameID, err := gameManager.JoinRandomGame(m.fingerPrint)
+			if m.selectedTimeControl == NoTimeControl {
+				m.gameNotice = "Select a time control first (1, 3, or 5)."
+				return m, nil
+			}
+			gameID, err := gameManager.JoinRandomGame(m.fingerPrint, m.selectedTimeControl.ToGameTimeControl())
 			if err != nil {
 				m.gameNotice = err.Error()
 				return m, nil
@@ -283,7 +344,7 @@ func (m model) updateGameLobby(msg tea.Msg) (model, tea.Cmd) {
 			m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
 			m.gameJoinInput.SetValue("")
 			m.moveInput.SetValue("")
-			m.gameNotice = "Joined game " + gameID + "."
+			m.gameNotice = "Joined " + m.currentGame.TimeControl().String() + " game " + gameID + "."
 			notifyOpponentJoined(gameID, m.fingerPrint)
 			return m, m.moveInput.Focus()
 		case "enter":
@@ -298,7 +359,7 @@ func (m model) updateGameLobby(msg tea.Msg) (model, tea.Cmd) {
 			m.currentGame = gameManager.GameForPlayer(m.fingerPrint)
 			m.gameJoinInput.SetValue("")
 			m.moveInput.SetValue("")
-			m.gameNotice = "Joined game " + gameID + "."
+			m.gameNotice = "Joined " + m.currentGame.TimeControl().String() + " game " + gameID + "."
 			notifyOpponentJoined(gameID, m.fingerPrint)
 			if m.currentGame.Status() == managers.GameStatusInProgress {
 				return m, m.moveInput.Focus()
@@ -343,13 +404,22 @@ func (m model) updateGameInProgress(msg tea.Msg) (model, tea.Cmd) {
 			m.currentGame = game
 			m.moveInput.SetValue("")
 			m.gameNotice = "Played " + move + "."
-			notifyOpponentMoved(game.ID(), m.fingerPrint, move)
 
-			var saveCmd tea.Cmd
 			if game.Status() == managers.GameStatusFinished {
-				saveCmd = saveGameCmd(gameManager.BuildGameRecord(game.ID()))
+				gameID := game.ID()
+				oppFP := gameManager.OpponentFingerprint(gameID, m.fingerPrint)
+				persistAndRemoveGame(gameID)
+				if oppFP != "" {
+					if prog := sessionManager.GetProgram(oppFP); prog != nil {
+						prog.Send(gameUpdatedMsg{move: move})
+					}
+				}
+				m.gamesLoading = true
+				return m, loadGamesCmd(m.fingerPrint)
 			}
-			return m, saveCmd
+
+			notifyOpponentMoved(game.ID(), m.fingerPrint, move)
+			return m, nil
 		}
 	}
 
@@ -402,7 +472,8 @@ func (m model) viewGameLobby() string {
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
-// gameHeaderRows is the shared header used by all in-game views.
+// gameHeaderRows is the shared header used by all in-game views (status,
+// time control, live clocks while in progress, notices).
 func (m model) gameHeaderRows() []string {
 	rows := []string{
 		gamePageTitle,
@@ -410,8 +481,17 @@ func (m model) gameHeaderRows() []string {
 		"Game ID: " + m.currentGame.ID(),
 		gameStatusLine(m.currentGame.Status()),
 	}
+	if m.currentGame.TimeControl() != 0 {
+		rows = append(rows, "Time control: "+m.currentGame.TimeControl().String())
+	}
 	if turnLine := gameTurnLine(m.currentGame, m.fingerPrint); turnLine != "" {
 		rows = append(rows, turnLine)
+	}
+	if m.currentGame.Status() == managers.GameStatusInProgress {
+		playerColor := m.currentGame.PlayerColor(m.fingerPrint)
+		if playerColor != chess.NoColor {
+			rows = append(rows, formatClock(m.whiteTimeLeft, m.blackTimeLeft, playerColor))
+		}
 	}
 	if m.gameNotice != "" {
 		rows = append(rows, m.gameNotice)
