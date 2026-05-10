@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/Ashutoshbind15/ssh-chess/common"
 	"github.com/Ashutoshbind15/ssh-chess/managers"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/joho/godotenv"
 	zone "github.com/lrstanley/bubblezone"
 	"github.com/notnil/chess"
@@ -111,7 +113,17 @@ func customMiddleWare() wish.Middleware {
 
 		renderer := bubbletea.MakeRenderer(s)
 		fingerPrint := s.Context().Value("fingerprint").(string)
-		m := initModel(fingerPrint, renderer)
+
+		var dump *os.File
+		if _, ok := os.LookupEnv("DEBUG"); ok {
+			var err error
+			dump, err = os.OpenFile("messages.log", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+			if err != nil {
+				log.Error("DEBUG: could not open messages.log", "error", err)
+			}
+		}
+
+		m := initModel(fingerPrint, renderer, dump)
 
 		program := tea.NewProgram(m, append(bubbletea.MakeOptions(s), tea.WithAltScreen(), tea.WithMouseCellMotion())...)
 
@@ -176,34 +188,35 @@ func (tc TimeControlChoice) ToGameTimeControl() managers.TimeControl {
 
 // Just a generic tea.Model to demo terminal information of ssh.
 type model struct {
-	width, height      int
-	counter            int
-	messages           []message
-	chatTextarea       textarea.Model
-	usernameInput      textinput.Model
-	gameJoinInput      textinput.Model
-	moveInput          textinput.Model
-	fingerPrint        string
-	page               Page
-	previousPage       *Page
-	player             *common.Player
-	pageList           list.Model
-	currentGame        *managers.Game
-	gameNotice         string
-	introLoading       bool
-	introSaving        bool
-	introErr           string
-	usernameSpinner    spinner.Model
-	gamesTable         table.Model
-	gamesLoading       bool
-	gamesErr           string
-	renderer           *lipgloss.Renderer
+	width, height       int
+	counter             int
+	messages            []message
+	chatTextarea        textarea.Model
+	usernameInput       textinput.Model
+	gameJoinInput       textinput.Model
+	moveInput           textinput.Model
+	fingerPrint         string
+	page                Page
+	previousPage        *Page
+	player              *common.Player
+	pageList            list.Model
+	currentGame         *managers.Game
+	gameNotice          string
+	introLoading        bool
+	introSaving         bool
+	introErr            string
+	usernameSpinner     spinner.Model
+	gamesTable          table.Model
+	gamesLoading        bool
+	gamesErr            string
+	renderer            *lipgloss.Renderer
 	selectedTimeControl TimeControlChoice
-	whiteTimeLeft      time.Duration
-	blackTimeLeft      time.Duration
-	zone               *zone.Manager
-	selected           string
-	possibleMoves      []string
+	whiteTimeLeft       time.Duration
+	blackTimeLeft       time.Duration
+	zone                *zone.Manager
+	selected            string
+	possibleMoves       []string
+	dump                io.Writer
 }
 
 func (m model) Init() tea.Cmd {
@@ -255,6 +268,9 @@ func (m model) closePageSelect() model {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.dump != nil {
+		spew.Fdump(m.dump, msg)
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width

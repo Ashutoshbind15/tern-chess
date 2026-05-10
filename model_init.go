@@ -1,6 +1,8 @@
 package main
 
 import (
+	"io"
+
 	"github.com/Ashutoshbind15/ssh-chess/common"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -81,7 +83,7 @@ func applyRendererTextInputStyles(ti *textinput.Model, r *lipgloss.Renderer) {
 	ti.Cursor.TextStyle = r.NewStyle()
 }
 
-func initModel(fingerPrint string, renderer *lipgloss.Renderer) model {
+func initModel(fingerPrint string, renderer *lipgloss.Renderer, dump io.Writer) model {
 	chatTa := common.InitTextArea()
 	applyRendererTextareaStyles(&chatTa, renderer)
 
@@ -104,23 +106,24 @@ func initModel(fingerPrint string, renderer *lipgloss.Renderer) model {
 	usernameInputTa.Width = textInputViewWidth
 
 	return model{
-		counter:            0,
-		messages:           []message{},
-		fingerPrint:        fingerPrint,
-		chatTextarea:       chatTa,
-		usernameInput:      usernameInputTa,
-		usernameSpinner:    common.InitSpinner(),
-		gameJoinInput:      gameJoinInput,
-		moveInput:          moveInput,
-		page:               PageIntro,
-		introLoading:       true,
-		pageList:           newPageList(80, 22, renderer),
-		currentGame:        gameManager.GameForPlayer(fingerPrint),
-		gamesTable:         newGamesTable(renderer),
-		renderer:           renderer,
+		counter:             0,
+		messages:            []message{},
+		dump:                dump,
+		fingerPrint:         fingerPrint,
+		chatTextarea:        chatTa,
+		usernameInput:       usernameInputTa,
+		usernameSpinner:     common.InitSpinner(),
+		gameJoinInput:       gameJoinInput,
+		moveInput:           moveInput,
+		page:                PageIntro,
+		introLoading:        true,
+		pageList:            newPageList(80, 22, renderer),
+		currentGame:         gameManager.GameForPlayer(fingerPrint),
+		gamesTable:          newGamesTable(renderer),
+		renderer:            renderer,
 		selectedTimeControl: NoTimeControl,
-		whiteTimeLeft:      0,
-		blackTimeLeft:      0,
-		zone:               zone.New(),
+		whiteTimeLeft:       0,
+		blackTimeLeft:       0,
+		zone:                zone.New(),
 	}
 }

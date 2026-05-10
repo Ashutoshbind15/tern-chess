@@ -3,3 +3,4 @@ ssh-chess
 id_*
 test.db
 .env
+messages.log
