@@ -22,3 +22,15 @@ type Game struct {
 	Method           string
 	TimeControl      int
 }
+
+type BotGame struct {
+	gorm.Model
+	BotGameID         string `gorm:"uniqueIndex"`
+	PlayerFingerprint string `gorm:"index"`
+	PlayerUsername    string
+	PlayerColor       string // "white" or "black"
+	BotLevel          int
+	PGN               string
+	Outcome           string
+	Method            string
+}

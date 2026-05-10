@@ -29,6 +29,7 @@ services:
     environment:
       TERN_CHESS_ENV: production
       DB_URL: postgres://tern_chess:tern_chess@postgres:5432/tern_chess?sslmode=disable
+      BOT_API_URL: ${BOT_API_URL:-http://host.docker.internal:8787}
     restart: unless-stopped
     init: true
     healthcheck:

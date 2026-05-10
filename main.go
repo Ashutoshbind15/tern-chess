@@ -55,6 +55,8 @@ var sessionManager *SessionManager
 var dataManager *managers.DataManager
 var gameManager *managers.GameManager
 var clockManager *managers.ClockManager
+var botGameManager *managers.BotGameManager
+var botAPIManager *managers.BotAPIManager
 
 func main() {
 	host := sshListenHost()
@@ -63,6 +65,8 @@ func main() {
 	dataManager = managers.NewDataManager()
 	gameManager = managers.NewGameManager()
 	clockManager = managers.NewClockManager(gameManager, dataManager, sessionManager)
+	botGameManager = managers.NewBotGameManager()
+	botAPIManager = managers.NewBotAPIManager()
 	go clockManager.Start()
 
 	s, err := wish.NewServer(
@@ -171,6 +175,7 @@ const (
 	PageChat   Page = "chat"
 	PageSelect Page = "select"
 	PageGame   Page = "game"
+	PageBot    Page = "bot"
 )
 
 type TimeControlChoice int
@@ -216,6 +221,14 @@ type model struct {
 	zone                *zone.Manager
 	selected            string
 	possibleMoves       []string
+	currentBotGame      *managers.BotGame
+	botGamesTable       table.Model
+	botGamesLoading     bool
+	botGamesErr         string
+	botSelectedLevel    int
+	botSelectedColor    chess.Color
+	botNotice           string
+	botMoving           bool
 	dump                io.Writer
 }
 
@@ -237,7 +250,7 @@ func (m model) introBusy() bool {
 func (m model) navigateTo(page Page) model {
 	// todo: add a toast or some sort of feedback for
 	// an unexpected action
-	if (page == PageChat || page == PageGame) && m.player == nil {
+	if (page == PageChat || page == PageGame || page == PageBot) && m.player == nil {
 		m.page = PageIntro
 		return m
 	}
@@ -349,6 +362,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m, cmd = m.UpdateGame(msg)
 		m.counter++
 		return m, cmd
+	case PageBot:
+		var cmd tea.Cmd
+		m, cmd = m.UpdateBot(msg)
+		m.counter++
+		return m, cmd
 	default:
 		m.counter++
 		return m, nil
@@ -384,6 +402,8 @@ func (m model) View() string {
 		pageContent = m.ViewIntro()
 	case PageGame:
 		pageContent = m.ViewGame()
+	case PageBot:
+		pageContent = m.ViewBot()
 	default:
 		pageContent = "Unknown page"
 	}

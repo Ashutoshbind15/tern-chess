@@ -208,11 +208,13 @@ func boardGlyph(piece rune) string {
 	}
 }
 
-func (m model) renderBoardFromFEN() string {
-	fen := m.currentGame.Game().FEN()
+// renderChessBoard renders an 8x8 board from a FEN string with mouse-zone
+// markers so clicks can be mapped back to algebraic squares. It is shared
+// between the multiplayer and bot pages so the zone layout is guaranteed
+// to be identical for both.
+func (m model) renderChessBoard(fen string, colorIsWhite bool) string {
 	board := parseBoardFENToString(fen)
-	flipped := m.currentGame.PlayerColor(m.fingerPrint) == chess.Black
-	colorIsWhite := !flipped
+	flipped := !colorIsWhite
 
 	cellStyle := m.renderer.NewStyle().
 		Padding(0, 1).
@@ -251,6 +253,12 @@ func (m model) renderBoardFromFEN() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+func (m model) renderBoardFromFEN() string {
+	fen := m.currentGame.Game().FEN()
+	colorIsWhite := m.currentGame.PlayerColor(m.fingerPrint) != chess.Black
+	return m.renderChessBoard(fen, colorIsWhite)
 }
 
 func containsSquare(squares []string, target string) bool {

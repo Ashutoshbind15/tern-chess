@@ -125,5 +125,7 @@ func initModel(fingerPrint string, renderer *lipgloss.Renderer, dump io.Writer) 
 		whiteTimeLeft:       0,
 		blackTimeLeft:       0,
 		zone:                zone.New(),
+		currentBotGame:      botGameManager.GameForPlayer(fingerPrint),
+		botGamesTable:       newBotGamesTable(),
 	}
 }

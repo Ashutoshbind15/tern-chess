@@ -92,6 +92,7 @@ func newPageList(width, height int, r *lipgloss.Renderer) list.Model {
 		pageMenuItem{page: PageIntro, title: "Intro", description: "Set or view your username"},
 		pageMenuItem{page: PageChat, title: "Chat", description: "Lobby chat"},
 		pageMenuItem{page: PageGame, title: "Game", description: "Play a game"},
+		pageMenuItem{page: PageBot, title: "Bot", description: "Play vs computer (untimed)"},
 	}
 	delegate := list.NewDefaultDelegate()
 	delegate.Styles = newRendererItemStyles(r)
@@ -127,6 +128,11 @@ func (m model) UpdateSelect(msg tea.Msg) (model, tea.Cmd) {
 				}
 				if m.currentGame.Status() == managers.GameStatusInProgress {
 					return m, m.moveInput.Focus()
+				}
+				return m, nil
+			case PageBot:
+				if m.currentBotGame == nil {
+					return m, func() tea.Msg { return botGamesRefreshMsg{} }
 				}
 				return m, nil
 			default:

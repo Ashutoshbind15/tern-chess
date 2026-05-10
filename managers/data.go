@@ -32,7 +32,7 @@ func (dm *DataManager) Init() {
 		panic(fmt.Sprintf("failed to connect database: %v", err))
 	}
 
-	if err := db.AutoMigrate(&common.Player{}, &common.Game{}); err != nil {
+	if err := db.AutoMigrate(&common.Player{}, &common.Game{}, &common.BotGame{}); err != nil {
 		panic(err)
 	}
 
@@ -68,6 +68,22 @@ func (dm *DataManager) GetGamesForPlayer(fingerprint string) ([]common.Game, err
 	var games []common.Game
 	result := dm.db.
 		Where("white_fingerprint = ? OR black_fingerprint = ?", fingerprint, fingerprint).
+		Order("created_at DESC").
+		Find(&games)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return games, nil
+}
+
+func (dm *DataManager) AddBotGame(game common.BotGame) error {
+	return dm.db.Create(&game).Error
+}
+
+func (dm *DataManager) GetBotGamesForPlayer(fingerprint string) ([]common.BotGame, error) {
+	var games []common.BotGame
+	result := dm.db.
+		Where("player_fingerprint = ?", fingerprint).
 		Order("created_at DESC").
 		Find(&games)
 	if result.Error != nil {
