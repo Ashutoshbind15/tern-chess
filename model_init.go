@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
+	zone "github.com/lrstanley/bubblezone"
 )
 
 // textInputViewWidth must be > 0: bubbles v0.21 textinput placeholderView uses
@@ -120,5 +121,6 @@ func initModel(fingerPrint string, renderer *lipgloss.Renderer) model {
 		selectedTimeControl: NoTimeControl,
 		whiteTimeLeft:      0,
 		blackTimeLeft:      0,
+		zone:               zone.New(),
 	}
 }

@@ -11,6 +11,7 @@ require (
 	github.com/charmbracelet/wish v1.4.7
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
+	github.com/lrstanley/bubblezone v0.0.0-20250222012949-f7fb4dcbadeb
 	github.com/muesli/termenv v0.16.0
 	github.com/notnil/chess v1.10.0
 	gorm.io/driver/postgres v1.6.0

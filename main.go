@@ -30,6 +30,7 @@ import (
 	"github.com/Ashutoshbind15/ssh-chess/common"
 	"github.com/Ashutoshbind15/ssh-chess/managers"
 	"github.com/joho/godotenv"
+	zone "github.com/lrstanley/bubblezone"
 	"github.com/notnil/chess"
 )
 
@@ -112,7 +113,7 @@ func customMiddleWare() wish.Middleware {
 		fingerPrint := s.Context().Value("fingerprint").(string)
 		m := initModel(fingerPrint, renderer)
 
-		program := tea.NewProgram(m, append(bubbletea.MakeOptions(s), tea.WithAltScreen())...)
+		program := tea.NewProgram(m, append(bubbletea.MakeOptions(s), tea.WithAltScreen(), tea.WithMouseCellMotion())...)
 
 		sessionManager.SetProgram(fingerPrint, program)
 
@@ -200,6 +201,9 @@ type model struct {
 	selectedTimeControl TimeControlChoice
 	whiteTimeLeft      time.Duration
 	blackTimeLeft      time.Duration
+	zone               *zone.Manager
+	selected           string
+	possibleMoves      []string
 }
 
 func (m model) Init() tea.Cmd {
@@ -263,6 +267,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
+			if m.zone != nil {
+				m.zone.Close()
+			}
 			return m, tea.Quit
 		case "tab":
 			if !m.introBusy() {
@@ -370,5 +377,9 @@ func (m model) View() string {
 		Height(m.height - lipgloss.Height(header) - lipgloss.Height(footer)).
 		Render(pageContent)
 
-	return lipgloss.JoinVertical(lipgloss.Top, header, content, footer)
+	output := lipgloss.JoinVertical(lipgloss.Top, header, content, footer)
+	if m.zone != nil {
+		return m.zone.Scan(output)
+	}
+	return output
 }

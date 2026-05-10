@@ -52,7 +52,7 @@ const (
 	gameHelpCreate     = "Create a game: ctrl+n"
 	gameHelpJoinRandom = "Join a random game: ctrl+r"
 	gameHelpJoinByID   = "Join by ID: type the game ID below and press enter"
-	gameHelpMove       = "Make a move: type UCI like e2e4 and press enter"
+	gameHelpMove       = "Make a move: click a piece then a square, or type UCI like e2e4"
 	gameNoGame         = "No game"
 	gameHelpTimeSelect = "Select time: [1] 1 min  [3] 3 min  [5] 5 min"
 )
@@ -108,6 +108,40 @@ func gameStatusLine(status string) string {
 		}
 		return "Status: " + status
 	}
+}
+
+func convertToChessboardPosition(x, y int, colorIsWhite bool) string {
+	if colorIsWhite {
+		return fmt.Sprintf("%c%d", 'a'+x, 8-y)
+	}
+	return fmt.Sprintf("%c%d", 'h'-x, y+1)
+}
+
+func parseBoardFENToString(fen string) [8][8]string {
+	var board [8][8]string
+	fields := strings.Fields(fen)
+	if len(fields) == 0 {
+		return board
+	}
+	rows := strings.Split(fields[0], "/")
+	for rowIndex, row := range rows {
+		fileIndex := 0
+		for _, square := range row {
+			if square >= '1' && square <= '8' {
+				emptySquares := int(square - '0')
+				for i := 0; i < emptySquares && fileIndex < 8; i++ {
+					board[rowIndex][fileIndex] = " "
+					fileIndex++
+				}
+				continue
+			}
+			if fileIndex < 8 {
+				board[rowIndex][fileIndex] = string(square)
+				fileIndex++
+			}
+		}
+	}
+	return board
 }
 
 func parseBoardFEN(fen string) [8][8]rune {
@@ -174,51 +208,58 @@ func boardGlyph(piece rune) string {
 	}
 }
 
-func renderBoardFromFEN(fen string, flipped bool, r *lipgloss.Renderer) string {
-	board := parseBoardFEN(fen)
+func (m model) renderBoardFromFEN() string {
+	fen := m.currentGame.Game().FEN()
+	board := parseBoardFENToString(fen)
+	flipped := m.currentGame.PlayerColor(m.fingerPrint) == chess.Black
+	colorIsWhite := !flipped
 
-	cellStyle := r.NewStyle().
+	cellStyle := m.renderer.NewStyle().
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("240"))
-	fileLabel := r.NewStyle().Width(5).Align(lipgloss.Center)
-	rankLabel := r.NewStyle().Width(3).Align(lipgloss.Center)
 
-	files := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
-	if flipped {
-		files = []string{"h", "g", "f", "e", "d", "c", "b", "a"}
-	}
-
-	header := []string{rankLabel.Render("")}
-	for _, file := range files {
-		header = append(header, fileLabel.Render(file))
-	}
-	header = append(header, rankLabel.Render(""))
-	headerLine := lipgloss.JoinHorizontal(lipgloss.Top, header...)
-
-	rows := []string{headerLine}
-	for displayRow := 0; displayRow < 8; displayRow++ {
-		sourceRow := displayRow
-		rank := 8 - displayRow
+	rows := make([]string, 8)
+	for i := 0; i < 8; i++ {
+		sourceRow := i
 		if flipped {
-			sourceRow = 7 - displayRow
-			rank = displayRow + 1
+			sourceRow = 7 - i
 		}
 
-		cells := []string{rankLabel.Render(strconv.Itoa(rank))}
-		for displayCol := 0; displayCol < 8; displayCol++ {
-			sourceCol := displayCol
+		cells := make([]string, 8)
+		for j := 0; j < 8; j++ {
+			sourceCol := j
 			if flipped {
-				sourceCol = 7 - displayCol
+				sourceCol = 7 - j
 			}
-			cells = append(cells, cellStyle.Render(boardGlyph(board[sourceRow][sourceCol])))
+
+			pos := convertToChessboardPosition(j, i, colorIsWhite)
+			glyph := boardGlyph(rune(board[sourceRow][sourceCol][0]))
+
+			var cell string
+			if m.selected == pos {
+				cell = cellStyle.Copy().BorderForeground(lipgloss.Color("190")).Render(glyph)
+			} else if containsSquare(m.possibleMoves, pos) {
+				cell = cellStyle.Copy().BorderForeground(lipgloss.Color("229")).Render(glyph)
+			} else {
+				cell = cellStyle.Render(glyph)
+			}
+
+			cells[j] = m.zone.Mark(pos, cell)
 		}
-		cells = append(cells, rankLabel.Render(strconv.Itoa(rank)))
-		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Center, cells...))
+		rows[i] = lipgloss.JoinHorizontal(lipgloss.Left, cells...)
 	}
 
-	rows = append(rows, headerLine)
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+func containsSquare(squares []string, target string) bool {
+	for _, s := range squares {
+		if s == target {
+			return true
+		}
+	}
+	return false
 }
 
 func gameTurnLine(game *managers.Game, fingerprint string) string {
@@ -384,11 +425,17 @@ func (m model) updateGameWaiting(msg tea.Msg) (model, tea.Cmd) {
 }
 
 // updateGameInProgress handles input during an active game: typing /
-// submitting a move via the move input.
+// submitting a move via the move input, and mouse clicks on the board.
 func (m model) updateGameInProgress(msg tea.Msg) (model, tea.Cmd) {
+	if mouseMsg, ok := msg.(tea.MouseMsg); ok {
+		return m.handleBoardMouse(mouseMsg)
+	}
+
 	if key, ok := msg.(tea.KeyMsg); ok {
 		switch key.String() {
 		case "esc":
+			m.selected = ""
+			m.possibleMoves = nil
 			m = m.navigateTo(PageChat)
 			return m, m.chatTextarea.Focus()
 		case "enter":
@@ -428,6 +475,99 @@ func (m model) updateGameInProgress(msg tea.Msg) (model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m model) handleBoardMouse(msg tea.MouseMsg) (model, tea.Cmd) {
+	if msg.Action != tea.MouseActionRelease || msg.Button != tea.MouseButtonLeft {
+		return m, nil
+	}
+
+	if !m.currentGame.IsPlayersTurn(m.fingerPrint) {
+		m.selected = ""
+		m.possibleMoves = nil
+		return m, nil
+	}
+
+	colorIsWhite := m.currentGame.PlayerColor(m.fingerPrint) == chess.White
+	doesClick := false
+
+	for i := 0; i < 8; i++ {
+		for j := 0; j < 8; j++ {
+			pos := convertToChessboardPosition(j, i, colorIsWhite)
+			if m.zone.Get(pos).InBounds(msg) {
+				doesClick = true
+
+				if m.selected == "" {
+					m.selected = pos
+					fenOpt, err := chess.FEN(m.currentGame.Game().FEN())
+					if err != nil {
+						return m, nil
+					}
+					clientChessClient := chess.NewGame(chess.UseNotation(chess.UCINotation{}), fenOpt)
+					possibleMoves := clientChessClient.ValidMoves()
+
+					validMovesFromSelected := []string{}
+					for _, move := range possibleMoves {
+						moveStr := move.String()
+						moveStrStart := moveStr[:2]
+						moveStrEnd := moveStr[2:]
+						if moveStrStart == m.selected {
+							if len(moveStrEnd) == 3 {
+								validMovesFromSelected = append(validMovesFromSelected, moveStrEnd[:2])
+							} else {
+								validMovesFromSelected = append(validMovesFromSelected, moveStrEnd)
+							}
+						}
+					}
+					m.possibleMoves = validMovesFromSelected
+				} else {
+					moveUCI := m.selected + pos
+					game, err := gameManager.MakeMove(m.fingerPrint, moveUCI)
+					if err != nil {
+						game2, perr := gameManager.MakeMove(m.fingerPrint, moveUCI+"q")
+						if perr != nil {
+							m.gameNotice = "Move rejected: " + err.Error()
+						} else {
+							game = game2
+						}
+					}
+
+					m.selected = ""
+					m.possibleMoves = nil
+
+					if game == nil {
+						return m, nil
+					}
+
+					m.currentGame = game
+					m.gameNotice = "Played " + moveUCI + "."
+
+					if game.Status() == managers.GameStatusFinished {
+						gameID := game.ID()
+						oppFP := gameManager.OpponentFingerprint(gameID, m.fingerPrint)
+						persistAndRemoveGame(gameID)
+						if oppFP != "" {
+							if prog := sessionManager.GetProgram(oppFP); prog != nil {
+								prog.Send(gameUpdatedMsg{move: moveUCI})
+							}
+						}
+						m.gamesLoading = true
+						return m, loadGamesCmd(m.fingerPrint)
+					}
+
+					notifyOpponentMoved(game.ID(), m.fingerPrint, moveUCI)
+					return m, nil
+				}
+			}
+		}
+	}
+
+	if !doesClick {
+		m.selected = ""
+		m.possibleMoves = nil
+	}
+
+	return m, nil
+}
+
 // updateGameFinished handles input after the game ended.
 func (m model) updateGameFinished(msg tea.Msg) (model, tea.Cmd) {
 	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
@@ -439,11 +579,7 @@ func (m model) updateGameFinished(msg tea.Msg) (model, tea.Cmd) {
 
 func (m model) getGameBoard() string {
 	if m.currentGame != nil && m.currentGame.Game() != nil {
-		return renderBoardFromFEN(
-			m.currentGame.Game().FEN(),
-			m.currentGame.PlayerColor(m.fingerPrint) == chess.Black,
-			m.renderer,
-		)
+		return m.renderBoardFromFEN()
 	}
 	return gameNoGame
 }
