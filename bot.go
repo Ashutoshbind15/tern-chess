@@ -418,14 +418,24 @@ func (m model) ViewBot() string {
 }
 
 func (m model) viewBotLobby() string {
+	titleStyle := m.renderer.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("62")).
+		Padding(0, 1)
+
+	helpStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("241"))
+	highlightStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+	infoStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("252"))
+	noticeStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57")).Padding(0, 1)
+
 	rows := []string{
-		botPageTitle,
+		titleStyle.Render(botPageTitle),
 		"",
 	}
 	if m.botSelectedLevel == 0 {
-		rows = append(rows, botHelpLevels)
+		rows = append(rows, helpStyle.Render(botHelpLevels))
 	} else {
-		rows = append(rows, "Level: "+strconv.Itoa(m.botSelectedLevel)+"  (press 1/3/5/7/9 to change)")
+		rows = append(rows, infoStyle.Render("Level: ")+highlightStyle.Render(strconv.Itoa(m.botSelectedLevel))+helpStyle.Render("  (press 1/3/5/7/9 to change)"))
 	}
 	colorChoice := "random"
 	switch m.botSelectedColor {
@@ -434,13 +444,13 @@ func (m model) viewBotLobby() string {
 	case chess.Black:
 		colorChoice = "black"
 	}
-	rows = append(rows, "Color: "+colorChoice+"  ("+botHelpColors+")")
-	rows = append(rows, "", botHelpStart)
+	rows = append(rows, infoStyle.Render("Color: ")+highlightStyle.Render(colorChoice)+helpStyle.Render("  ("+botHelpColors+")"))
+	rows = append(rows, "", helpStyle.Render(botHelpStart))
 
 	if m.botNotice != "" {
-		rows = append(rows, "", m.botNotice)
+		rows = append(rows, "", noticeStyle.Render(m.botNotice))
 	}
-	rows = append(rows, "", "Your bot games:")
+	rows = append(rows, "", infoStyle.Render("Your bot games:"))
 	switch {
 	case m.botGamesLoading:
 		rows = append(rows, m.usernameSpinner.View()+" loading...")
@@ -455,28 +465,39 @@ func (m model) viewBotLobby() string {
 }
 
 func (m model) botHeaderRows() []string {
+	titleStyle := m.renderer.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("62")).
+		Padding(0, 1)
+
+	infoStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("252"))
+	highlightStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+	noticeStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57")).Padding(0, 1)
+
 	rows := []string{
-		botPageTitle,
+		titleStyle.Render(botPageTitle),
 		"",
-		"Game ID: " + m.currentBotGame.ID(),
-		"Level: " + strconv.Itoa(m.currentBotGame.BotLevel()),
-		botStatusLine(m.currentBotGame),
+		infoStyle.Render("Game ID: ") + highlightStyle.Render(m.currentBotGame.ID()),
+		infoStyle.Render("Level: ") + highlightStyle.Render(strconv.Itoa(m.currentBotGame.BotLevel())),
+		infoStyle.Render(botStatusLine(m.currentBotGame)),
 	}
 	if turn := botTurnLine(m.currentBotGame, m.botMoving); turn != "" {
-		rows = append(rows, turn)
+		rows = append(rows, highlightStyle.Render(turn))
 	}
 	if m.botNotice != "" {
-		rows = append(rows, m.botNotice)
+		rows = append(rows, noticeStyle.Render(m.botNotice))
 	}
 	return rows
 }
 
 func (m model) viewBotInProgress() string {
-	rows := append(m.botHeaderRows(), "", m.renderBotBoardFromFEN(), "", botHelpMove, botHelpResign)
+	helpStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("241"))
+	rows := append(m.botHeaderRows(), "", m.renderBotBoardFromFEN(), "", helpStyle.Render(botHelpMove), helpStyle.Render(botHelpResign))
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
 func (m model) viewBotFinished() string {
-	rows := append(m.botHeaderRows(), "", m.renderBotBoardFromFEN(), "", "Press esc to return to bot lobby.")
+	helpStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("241"))
+	rows := append(m.botHeaderRows(), "", m.renderBotBoardFromFEN(), "", helpStyle.Render("Press esc to return to bot lobby."))
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }

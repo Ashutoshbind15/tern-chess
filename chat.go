@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // UpdateChat handles chat-specific update logic
@@ -38,18 +36,34 @@ func (m model) UpdateChat(msg tea.Msg) (model, tea.Cmd) {
 
 // ViewChat renders the chat view
 func (m model) ViewChat() string {
-	s := fmt.Sprintf("counter: %d", m.counter)
+	titleStyle := m.renderer.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("62")).
+		Padding(0, 1).
+		MarginBottom(1)
 
-	s += "\n\n"
+	senderStyle := m.renderer.NewStyle().
+		Foreground(lipgloss.Color("205")).
+		Bold(true)
 
-	var msgsBuilder strings.Builder
-	for _, msg := range m.messages {
-		fmt.Fprintf(&msgsBuilder, "%s: %s\n", msg.sender, msg.content)
+	msgStyle := m.renderer.NewStyle().
+		Foreground(lipgloss.Color("252"))
+
+	var rows []string
+	rows = append(rows, titleStyle.Render("Lobby Chat"))
+
+	if len(m.messages) == 0 {
+		rows = append(rows, m.renderer.NewStyle().Faint(true).Render("No messages yet. Be the first to say hi!"))
+	} else {
+		for _, msg := range m.messages {
+			sender := senderStyle.Render(msg.sender + ":")
+			content := msgStyle.Render(msg.content)
+			rows = append(rows, sender+" "+content)
+		}
 	}
 
-	s += fmt.Sprintf("messages: %s", msgsBuilder.String())
-	s += "\n\n"
-	s += m.chatTextarea.View()
+	rows = append(rows, "")
+	rows = append(rows, m.chatTextarea.View())
 
-	return s
+	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }

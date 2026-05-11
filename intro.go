@@ -116,7 +116,9 @@ func (m model) ViewIntro() string {
 			lines = append(lines, m.usernameSpinner.View()+" saving profile...")
 		}
 	default:
-		lines = append(lines, "Welcome, "+m.player.Username, "", "Your games:")
+		welcomeStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+		infoStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("252"))
+		lines = append(lines, welcomeStyle.Render("Welcome, "+m.player.Username), "", infoStyle.Render("Your games:"))
 		switch {
 		case m.gamesLoading:
 			lines = append(lines, m.usernameSpinner.View()+" loading games...")

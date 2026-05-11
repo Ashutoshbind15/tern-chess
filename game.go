@@ -81,16 +81,25 @@ func formatClock(whiteTime, blackTime time.Duration, playerColor chess.Color) st
 }
 
 func gamePageCommonRows(m model) []string {
+	titleStyle := m.renderer.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("62")).
+		Padding(0, 1)
+
+	helpStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("241"))
+	highlightStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+	infoStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("252"))
+
 	rows := []string{
-		gamePageTitle,
+		titleStyle.Render(gamePageTitle),
 		"",
 	}
 	if m.selectedTimeControl == NoTimeControl {
-		rows = append(rows, gameHelpTimeSelect)
+		rows = append(rows, helpStyle.Render(gameHelpTimeSelect))
 	} else {
-		rows = append(rows, "Time control: "+strconv.Itoa(int(m.selectedTimeControl))+" min  (press 1/3/5 to change)")
+		rows = append(rows, infoStyle.Render("Time control: ")+highlightStyle.Render(strconv.Itoa(int(m.selectedTimeControl))+" min")+helpStyle.Render("  (press 1/3/5 to change)"))
 	}
-	rows = append(rows, "", gameHelpCreate, gameHelpJoinRandom, gameHelpJoinByID, "", m.gameJoinInput.View())
+	rows = append(rows, "", helpStyle.Render(gameHelpCreate), helpStyle.Render(gameHelpJoinRandom), helpStyle.Render(gameHelpJoinByID), "", m.gameJoinInput.View())
 	return rows
 }
 
@@ -610,46 +619,58 @@ func (m model) ViewGame() string {
 func (m model) viewGameLobby() string {
 	rows := gamePageCommonRows(m)
 	if m.gameNotice != "" {
-		rows = append(rows, "", m.gameNotice)
+		noticeStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57")).Padding(0, 1)
+		rows = append(rows, "", noticeStyle.Render(m.gameNotice))
 	}
-	rows = append(rows, "", gameNoGame)
+	rows = append(rows, "", m.renderer.NewStyle().Faint(true).Render(gameNoGame))
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
 // gameHeaderRows is the shared header used by all in-game views (status,
 // time control, live clocks while in progress, notices).
 func (m model) gameHeaderRows() []string {
+	titleStyle := m.renderer.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("62")).
+		Padding(0, 1)
+
+	infoStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("252"))
+	highlightStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+	noticeStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("229")).Background(lipgloss.Color("57")).Padding(0, 1)
+
 	rows := []string{
-		gamePageTitle,
+		titleStyle.Render(gamePageTitle),
 		"",
-		"Game ID: " + m.currentGame.ID(),
-		gameStatusLine(m.currentGame.Status()),
+		infoStyle.Render("Game ID: ") + highlightStyle.Render(m.currentGame.ID()),
+		infoStyle.Render(gameStatusLine(m.currentGame.Status())),
 	}
 	if m.currentGame.TimeControl() != 0 {
-		rows = append(rows, "Time control: "+m.currentGame.TimeControl().String())
+		rows = append(rows, infoStyle.Render("Time control: ")+highlightStyle.Render(m.currentGame.TimeControl().String()))
 	}
 	if turnLine := gameTurnLine(m.currentGame, m.fingerPrint); turnLine != "" {
-		rows = append(rows, turnLine)
+		rows = append(rows, highlightStyle.Render(turnLine))
 	}
 	if m.currentGame.Status() == managers.GameStatusInProgress {
 		playerColor := m.currentGame.PlayerColor(m.fingerPrint)
 		if playerColor != chess.NoColor {
-			rows = append(rows, formatClock(m.whiteTimeLeft, m.blackTimeLeft, playerColor))
+			rows = append(rows, infoStyle.Render(formatClock(m.whiteTimeLeft, m.blackTimeLeft, playerColor)))
 		}
 	}
 	if m.gameNotice != "" {
-		rows = append(rows, m.gameNotice)
+		rows = append(rows, noticeStyle.Render(m.gameNotice))
 	}
 	return rows
 }
 
 func (m model) viewGameWaiting() string {
-	rows := append(m.gameHeaderRows(), "", m.getGameBoard(), "", "Waiting for an opponent. Share the game ID above.")
+	helpStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("241"))
+	rows := append(m.gameHeaderRows(), "", m.getGameBoard(), "", helpStyle.Render("Waiting for an opponent. Share the game ID above."))
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 
 func (m model) viewGameInProgress() string {
-	rows := append(m.gameHeaderRows(), "", m.getGameBoard(), "", gameHelpMove, m.moveInput.View())
+	helpStyle := m.renderer.NewStyle().Foreground(lipgloss.Color("241"))
+	rows := append(m.gameHeaderRows(), "", m.getGameBoard(), "", helpStyle.Render(gameHelpMove), m.moveInput.View())
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }
 

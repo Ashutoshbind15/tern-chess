@@ -381,16 +381,22 @@ func (m model) headerText() string {
 }
 
 func (m model) View() string {
-	header := m.renderer.NewStyle().
+	headerStyle := m.renderer.NewStyle().
 		Align(lipgloss.Center).
 		Width(m.width).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
-		Render(m.headerText())
+		BorderForeground(lipgloss.Color("62")).
+		Foreground(lipgloss.Color("229")).
+		Bold(true)
 
-	footer := m.renderer.NewStyle().
+	header := headerStyle.Render("♜ >_ Term Chess | " + m.headerText())
+
+	footerStyle := m.renderer.NewStyle().
 		Align(lipgloss.Center).
 		Width(m.width).
-		Render(string(m.page))
+		Foreground(lipgloss.Color("241"))
+
+	footer := footerStyle.Render("Page: " + string(m.page) + " | Press tab to open menu")
 
 	var pageContent string
 	switch m.page {
