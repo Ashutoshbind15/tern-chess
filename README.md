@@ -1,6 +1,6 @@
 # Term Chess
 
-Term Chess is an SSH-native terminal chess server built in Go. Players connect over SSH, land directly inside a Bubble Tea interface, create time-controlled multiplayer games, chat in the lobby, or play untimed bot matches backed by an external chess engine API.
+Term Chess is an SSH-native terminal chess server built in Go. Players connect over SSH, land directly inside a Bubble Tea interface, create time-controlled multiplayer games, chat in the lobby, or play untimed bot matches backed by [`elo-based-rec`](https://github.com/Ashutoshbind15/elo-based-rec).
 
 ## Features
 
@@ -9,7 +9,7 @@ Term Chess is an SSH-native terminal chess server built in Go. Players connect o
 - Multiplayer chess with 1, 3, and 5 minute time controls
 - Live clock updates and time-forfeit handling
 - Lobby chat across active sessions
-- Bot games against an external engine API
+- Bot games against [`elo-based-rec`](https://github.com/Ashutoshbind15/elo-based-rec)
 - Postgres-backed player and game history storage
 
 ## Architecture
@@ -75,7 +75,7 @@ The `main` package owns transport and UI orchestration: it starts the SSH server
 
 #### `BotAPIManager`
 
-`BotAPIManager` is a thin HTTP client for the external engine service. It sends `FEN + level`, receives a UCI move, and keeps engine concerns outside the main application process.
+`BotAPIManager` is a thin HTTP client for the external [`elo-based-rec`](https://github.com/Ashutoshbind15/elo-based-rec) service. It sends `FEN + level`, receives a UCI move, and keeps engine concerns outside the main application process.
 
 ### Request and State Flow
 
@@ -106,7 +106,7 @@ The `main` package owns transport and UI orchestration: it starts the SSH server
 - `Bubble Tea`, `Bubbles`, and `Lip Gloss` for the terminal UI
 - `notnil/chess` for chess rules and move validation
 - Postgres + GORM for persistence
-- External HTTP bot API for engine-backed play
+- [`elo-based-rec`](https://github.com/Ashutoshbind15/elo-based-rec) for engine-backed bot play
 - Docker / Docker Compose for local infrastructure
 
 ## Running Locally
@@ -115,7 +115,7 @@ The `main` package owns transport and UI orchestration: it starts the SSH server
 
 - Go `1.25+`
 - Docker and Docker Compose
-- An engine service available at `BOT_API_URL` for bot games
+- The [`elo-based-rec`](https://github.com/Ashutoshbind15/elo-based-rec) service available at `BOT_API_URL` for bot games
 
 ### Option 1: Run with Docker Compose
 
@@ -162,7 +162,7 @@ Example values are provided in `.env.example`.
 - `DB_URL`
   - Postgres connection string
 - `BOT_API_URL`
-  - base URL for the external bot engine service
+  - base URL for the [`elo-based-rec`](https://github.com/Ashutoshbind15/elo-based-rec) service
 - `DEBUG`
   - when set, message traffic is dumped to `messages.log`
 
