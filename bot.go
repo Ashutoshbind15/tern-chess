@@ -56,10 +56,10 @@ type botModel struct {
 
 func newBotModel(ctx *Context) botModel {
 	return botModel{
-		ctx:           ctx,
+		ctx:            ctx,
 		currentBotGame: botGameManager.GameForPlayer(ctx.fingerPrint),
-		botGamesTable: newBotGamesTable(),
-		botSpinner:    common.InitSpinner(),
+		botGamesTable:  newBotGamesTable(),
+		botSpinner:     common.InitSpinner(),
 	}
 }
 
@@ -148,16 +148,23 @@ func (m botModel) startBotGamesLoad() (botModel, tea.Cmd) {
 	return m, tea.Batch(m.botSpinner.Tick, loadBotGamesCmd(m.ctx.fingerPrint))
 }
 
-func persistAndRemoveBotGame(gameID string) {
-	record, ok := botGameManager.BuildBotGameRecord(gameID)
-	if !ok {
-		return
+// persistAndReloadBotGameCmd persists a finished bot game and then reloads
+// the player's bot games list. Both DB operations run inside the goroutine
+// so Update() returns immediately and the event loop stays responsive. The
+// reload is chained after the persist (rather than fired as a separate cmd
+// in parallel) so the new game is guaranteed to be visible in the result.
+func persistAndReloadBotGameCmd(gameID, fingerprint string) tea.Cmd {
+	return func() tea.Msg {
+		if record, ok := botGameManager.BuildBotGameRecord(gameID); ok {
+			if err := dataManager.AddBotGame(record); err != nil {
+				log.Error("failed to persist bot game", "id", gameID, "error", err)
+			} else {
+				botGameManager.RemoveBotGame(gameID)
+			}
+		}
+		games, err := dataManager.GetBotGamesForPlayer(fingerprint)
+		return loadBotGamesMsg{games: games, err: err}
 	}
-	if err := dataManager.AddBotGame(record); err != nil {
-		log.Error("failed to persist bot game", "id", gameID, "error", err)
-		return
-	}
-	botGameManager.RemoveBotGame(gameID)
 }
 
 // Update is the entry point for the bot page. Mirrors the structure of
@@ -279,8 +286,7 @@ func (m botModel) updateBotInProgress(msg tea.Msg) (botModel, tea.Cmd) {
 			}
 			m.currentBotGame = game
 			m.botNotice = "You resigned."
-			persistAndRemoveBotGame(game.ID())
-			return m, loadBotGamesCmd(m.ctx.fingerPrint)
+			return m, persistAndReloadBotGameCmd(game.ID(), m.ctx.fingerPrint)
 		}
 	}
 	return m, nil
@@ -315,9 +321,7 @@ func (m botModel) handleBotMove(msg botMoveMsg) (botModel, tea.Cmd) {
 	m.botNotice = "Bot played " + msg.move + "."
 
 	if game.Status() == managers.GameStatusFinished {
-		gameID := game.ID()
-		persistAndRemoveBotGame(gameID)
-		return m, loadBotGamesCmd(m.ctx.fingerPrint)
+		return m, persistAndReloadBotGameCmd(game.ID(), m.ctx.fingerPrint)
 	}
 	return m, nil
 }
@@ -391,9 +395,7 @@ func (m botModel) handleBotBoardMouse(msg tea.MouseMsg) (botModel, tea.Cmd) {
 					m.botNotice = "You played " + moveUCI + "."
 
 					if game.Status() == managers.GameStatusFinished {
-						gameID := game.ID()
-						persistAndRemoveBotGame(gameID)
-						return m, loadBotGamesCmd(m.ctx.fingerPrint)
+						return m, persistAndReloadBotGameCmd(game.ID(), m.ctx.fingerPrint)
 					}
 
 					m.botMoving = true

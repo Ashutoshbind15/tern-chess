@@ -96,16 +96,24 @@ func notifyOpponentMoved(gameID string, moverFingerprint string, move string) {
 	}
 }
 
-func persistAndRemoveGame(gameID string) {
-	record := gameManager.BuildGameRecord(gameID)
-	if err := dataManager.AddGame(record); err == nil {
-		gameManager.RemoveGame(gameID)
-		// Both players need their intro games table refreshed.
-		for _, fp := range []string{record.WhiteFingerprint, record.BlackFingerprint} {
-			if prog := sessionManager.GetProgram(fp); prog != nil {
-				prog.Send(gamesRefreshMsg{})
+// persistAndRemoveGameCmd persists a finished game and clears it from
+// memory off the Bubble Tea event loop. The DB write happens in a goroutine
+// so Update() doesn't block waiting on Postgres. Returns a nil msg because
+// each affected player is notified via prog.Send(gamesRefreshMsg{}) inside
+// the goroutine (the gamesRefreshMsg fanout reaches both players, not just
+// the caller, so a per-program msg return wouldn't be enough).
+func persistAndRemoveGameCmd(gameID string) tea.Cmd {
+	return func() tea.Msg {
+		record := gameManager.BuildGameRecord(gameID)
+		if err := dataManager.AddGame(record); err == nil {
+			gameManager.RemoveGame(gameID)
+			for _, fp := range []string{record.WhiteFingerprint, record.BlackFingerprint} {
+				if prog := sessionManager.GetProgram(fp); prog != nil {
+					prog.Send(gamesRefreshMsg{})
+				}
 			}
 		}
+		return nil
 	}
 }
 
@@ -473,13 +481,12 @@ func (m gameModel) updateGameInProgress(msg tea.Msg) (gameModel, tea.Cmd) {
 			if game.Status() == managers.GameStatusFinished {
 				gameID := game.ID()
 				oppFP := gameManager.OpponentFingerprint(gameID, m.ctx.fingerPrint)
-				persistAndRemoveGame(gameID)
 				if oppFP != "" {
 					if prog := sessionManager.GetProgram(oppFP); prog != nil {
 						prog.Send(gameUpdatedMsg{move: move})
 					}
 				}
-				return m, gamesRefreshCmd()
+				return m, persistAndRemoveGameCmd(gameID)
 			}
 
 			notifyOpponentMoved(game.ID(), m.ctx.fingerPrint, move)
@@ -560,13 +567,12 @@ func (m gameModel) handleBoardMouse(msg tea.MouseMsg) (gameModel, tea.Cmd) {
 					if game.Status() == managers.GameStatusFinished {
 						gameID := game.ID()
 						oppFP := gameManager.OpponentFingerprint(gameID, m.ctx.fingerPrint)
-						persistAndRemoveGame(gameID)
 						if oppFP != "" {
 							if prog := sessionManager.GetProgram(oppFP); prog != nil {
 								prog.Send(gameUpdatedMsg{move: moveUCI})
 							}
 						}
-						return m, gamesRefreshCmd()
+						return m, persistAndRemoveGameCmd(gameID)
 					}
 
 					notifyOpponentMoved(game.ID(), m.ctx.fingerPrint, moveUCI)
