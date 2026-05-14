@@ -22,6 +22,7 @@ type ClockUpdateMsg struct {
 type TimeForfeitMsg struct {
 	GameID     string
 	LoserColor chess.Color
+	Snapshot   *managers.Snapshot
 }
 
 // runClockTicker drives in-progress game clocks. It is intentionally cmd
@@ -42,22 +43,23 @@ func runClockTicker(stopCh <-chan struct{}) {
 	}
 }
 
+// tickClocks snapshots every in-progress game once (under the manager
+// lock) and then walks the snapshots without further coordination. The
+// previous version called CurrentClocks/IsTimeExpired on live *Game
+// pointers without holding gm.mu, which races against MakeMove.
 func tickClocks() {
-	for _, game := range gameManager.AllInProgressGames() {
-		if expired, loserColor := game.IsTimeExpired(); expired {
-			handleTimeForfeit(game, loserColor)
+	for _, info := range gameManager.TickAll() {
+		if info.Expired {
+			handleTimeForfeit(info)
 			continue
 		}
 
-		whiteTime, blackTime := game.CurrentClocks()
 		msg := ClockUpdateMsg{
-			WhiteTime: whiteTime,
-			BlackTime: blackTime,
-			GameID:    game.ID(),
+			WhiteTime: info.WhiteTime,
+			BlackTime: info.BlackTime,
+			GameID:    info.GameID,
 		}
-
-		whiteFP, blackFP := game.Fingerprints()
-		for _, fp := range []string{whiteFP, blackFP} {
+		for _, fp := range []string{info.WhiteFingerprint, info.BlackFingerprint} {
 			if fp == "" {
 				continue
 			}
@@ -68,13 +70,12 @@ func tickClocks() {
 	}
 }
 
-func handleTimeForfeit(game *managers.Game, loserColor chess.Color) {
-	gameID := game.ID()
-	if finished := gameManager.EndByTimeForfeit(gameID, loserColor); finished == nil {
+func handleTimeForfeit(info managers.TickInfo) {
+	gameID := info.GameID
+	finished := gameManager.EndByTimeForfeit(gameID, info.LoserColor)
+	if finished == nil {
 		return
 	}
-
-	whiteFP, blackFP := game.Fingerprints()
 
 	record := gameManager.BuildGameRecord(gameID)
 	record.Method = managers.MethodTimeForfeit
@@ -83,13 +84,14 @@ func handleTimeForfeit(game *managers.Game, loserColor chess.Color) {
 	}
 	gameManager.RemoveGame(gameID)
 
-	log.Info("Time forfeit", "game", gameID, "loser_color", loserColor)
+	log.Info("Time forfeit", "game", gameID, "loser_color", info.LoserColor)
 
 	forfeitMsg := TimeForfeitMsg{
 		GameID:     gameID,
-		LoserColor: loserColor,
+		LoserColor: info.LoserColor,
+		Snapshot:   finished,
 	}
-	for _, fp := range []string{whiteFP, blackFP} {
+	for _, fp := range []string{info.WhiteFingerprint, info.BlackFingerprint} {
 		if fp == "" {
 			continue
 		}

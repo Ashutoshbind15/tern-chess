@@ -144,7 +144,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.activateCurrentPage()
 			}
 		}
-	case opponentJoinedGameMsg, gameUpdatedMsg, ClockUpdateMsg, TimeForfeitMsg:
+	case opponentJoinedGameMsg, gameUpdatedMsg, ClockUpdateMsg, TimeForfeitMsg, moveAppliedMsg, gameLobbyResultMsg:
 		var cmd tea.Cmd
 		m.game, cmd = m.game.Update(msg)
 		return m, cmd

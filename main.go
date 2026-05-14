@@ -135,10 +135,12 @@ type message struct {
 
 type opponentJoinedGameMsg struct {
 	opponentName string
+	snapshot     *managers.Snapshot
 }
 
 type gameUpdatedMsg struct {
-	move string
+	move     string
+	snapshot *managers.Snapshot
 }
 
 type loadPlayerMsg struct {
