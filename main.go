@@ -153,6 +153,7 @@ type message struct {
 	sender  string
 	content string
 	system  bool
+	at      time.Time
 }
 
 type presenceMsg struct {

@@ -3,6 +3,7 @@ module github.com/Ashutoshbind15/ssh-chess
 go 1.25.6
 
 require (
+	github.com/TwiN/go-away v1.8.1
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
